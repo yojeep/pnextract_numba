@@ -1,6 +1,5 @@
 import numpy as np
 from edt import edt
-from skimage.morphology import footprint_rectangle
 import numba as nb
 import numpy.linalg as LA
 import matplotlib.pyplot as plt
