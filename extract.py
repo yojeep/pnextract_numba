@@ -10,6 +10,7 @@ image = np.fromfile(
 ).reshape(300, 300, 100)
 image = image == 0
 
+
 # cube1 = footprint_rectangle(shape=(6, 6, 6))
 # image = np.zeros((20, 20, 20))
 # image[7:13, 7:13, 7:13] = cube1
