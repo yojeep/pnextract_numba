@@ -408,14 +408,14 @@ def competeForParent(
                                 leveli > levelj
                                 and (bvi_R - ri + 2.0 * noise) / (dist_bvi_vi + 1.2)
                                 < (rj - ri + 2.0 * noise) / (dist_vivj + 1.3)
-                                and ~inParents(ball_boss, vj, vi)
+                                and not inParents(ball_boss, vj, vi)
                             ):
                                 ball_boss[vi] = vj
                             elif (
                                 leveli < levelj
                                 and (bvj_R - rj + 2.0 * noise) / (dist_bvj_vj + 1.2)
                                 < (ri - rj + 2.0 * noise) / (dist_vivj + 1.3)
-                                and ~inParents(ball_boss, vi, vj)
+                                and not inParents(ball_boss, vi, vj)
                             ):
                                 ball_boss[vj] = vi
                             elif (
