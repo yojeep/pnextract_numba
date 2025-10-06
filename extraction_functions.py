@@ -14,7 +14,7 @@ from numpy import linalg as LA
 # _nRSmoothing = 3
 # _RCorsnf = 0.15
 # _RCorsn = abs(_minRp)
-_mp5 = -0.5
+_mp5 = np.float32(-0.5)
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
@@ -49,9 +49,9 @@ def inParents(ball_boss, ball_index_i, ball_index_j):
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
 def paradox_pre_removeincludedballI(image, dt, isball, _minRp):
     nz, ny, nx = image.shape
-    zs = np.arange(0, nz, 2)
-    ys = np.arange(0, ny, 2)
-    xs = np.arange(0, nx, 2)
+    zs = np.arange(0, nz - 1, 2)
+    ys = np.arange(0, ny - 1, 2)
+    xs = np.arange(0, nx - 1, 2)
     for z_id in nb.prange(len(zs)):
         z = zs[z_id]
         for y_id in nb.prange(len(ys)):
@@ -60,18 +60,20 @@ def paradox_pre_removeincludedballI(image, dt, isball, _minRp):
                 x = xs[x_id]
                 if image[z, y, x]:
                     max_val = -np.inf
-                    max_index = np.array([0, 0, 0])
+                    max_z = 0
+                    max_y = 0
+                    max_x = 0
                     for i in range(2):
                         for j in range(2):
                             for k in range(2):
                                 value = dt[z + i, y + j, x + k]
                                 if value > max_val:
                                     max_val = value
-                                    max_index[0] = z + i
-                                    max_index[1] = y + j
-                                    max_index[2] = x + k
+                                    max_z = z + i
+                                    max_y = y + j
+                                    max_x = x + k
                     if max_val > _minRp:
-                        isball[max_index[0], max_index[1], max_index[2]] = True
+                        isball[max_z, max_y, max_x] = True
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
@@ -121,16 +123,16 @@ def paradox_removeincludedballI(
 def get_sorted_ball_indices_ball_R(dt, isball):
     balls_indices = np.column_stack(np.where(isball))
     R = dt[balls_indices[:, 0], balls_indices[:, 1], balls_indices[:, 2]]
-    sorted_indices = np.argsort(R)[::-1]
+    sorted_indices = np.argsort(R, kind="stable")[::-1]
     balls_indices = balls_indices[sorted_indices]
     R = R[sorted_indices]
     return balls_indices, R
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
 def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
     nz, ny, nx = image.shape
-    for i in range(ball_indices.shape[0]):
+    for i in nb.prange(ball_indices.shape[0]):
         disp = np.array([0, 0, 0])
         fz, fy, fx = ball_findices[i]
         fz_int = int(fz)
@@ -799,7 +801,7 @@ def grow_pores_med_strict(image_VElems, dt_VElems, VElems, bgn, lst, raw_value):
         for j in nb.prange(1, ny - 1):
             for i in nb.prange(1, nz - 1):
                 if image_VElems[i, j, k]:
-                    pID = voxls[k, j, i]
+                    pID = voxls[i, j, k]
                     if pID == raw_value:
                         R = dt_VElems[i, j, k]
                         neIs = np.full(6, -1, dtype=np.int32)
@@ -868,7 +870,7 @@ def grow_pores_median(image_VElems, dt_VElems, VElems, bgn, lst, raw_value):
         for j in nb.prange(1, ny - 1):
             for i in nb.prange(1, nz - 1):
                 if image_VElems[i, j, k]:
-                    pID = voxls[k, j, i]
+                    pID = voxls[i, j, k]
                     if pID == raw_value:
                         R = dt_VElems[i, j, k]
                         neIs = np.full(6, -1, dtype=np.int32)
@@ -931,7 +933,7 @@ def grow_pores_med_eqs(image_VElems, dt_VElems, VElems, bgn, lst, raw_value):
         for j in nb.prange(1, ny - 1):
             for i in nb.prange(1, nz - 1):
                 if image_VElems[i, j, k]:
-                    pID = voxls[k, j, i]
+                    pID = voxls[i, j, k]
                     if pID == raw_value:
                         R = dt_VElems[i, j, k]
                         neIs = np.full(6, -1, dtype=np.int32)
@@ -994,7 +996,7 @@ def grow_pores_med_eqs_loose(image_VElems, VElems, bgn, lst, raw_value):
         for j in nb.prange(1, ny - 1):
             for i in nb.prange(1, nz - 1):
                 if image_VElems[i, j, k]:
-                    pID = voxls[k, j, i]
+                    pID = voxls[i, j, k]
                     if pID == raw_value:
                         neIs = np.full(6, -1, dtype=np.int32)
                         nDifferentID = 0
@@ -1161,56 +1163,42 @@ def refine_with_master_ball(VElems, ball_boss, ball_findices):
     return VElems
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(cache=True, fastmath=True, nogil=True)
 def get_max_count_nei(neis):
-    # 降序排序（大的数在前）
-    sorted_neis = np.sort(neis)[::-1]
-    if len(sorted_neis) == 0:
-        return -1, 0  # 处理空输入
+    n = len(neis)
+    if n == 0:
+        return -1, 0
 
-    max_value = sorted_neis[0]  # 当前候选最大值
-    max_count = 1  # 当前最大出现次数
+    max_val = -1
+    max_count = 0
 
-    current_value = sorted_neis[0]  # 当前遍历的值
-    current_count = 1  # 当前值的出现次数
+    # 对每个唯一值统计频次（暴力但高效，因为 n <= 6）
+    for i in range(n):
+        val = neis[i]
+        count = 0
+        for j in range(n):
+            if neis[j] == val:
+                count += 1
 
-    # 单次遍历统计
-    for i in range(1, len(sorted_neis)):
-        if sorted_neis[i] == current_value:
-            current_count += 1
-        else:
-            # 当遇到新值时，比较并更新最大值
-            if (current_count > max_count) or (
-                current_count == max_count and current_value > max_value
-            ):
-                max_count = current_count
-                max_value = current_value
-            # 重置当前统计
-            current_value = sorted_neis[i]
-            current_count = 1
+        # 更新规则：频次更高，或频次相同但值更大
+        if count > max_count or (count == max_count and val > max_val):
+            max_count = count
+            max_val = val
 
-    # 处理最后一个元素的统计
-    if (current_count > max_count) or (
-        current_count == max_count and current_value > max_value
-    ):
-        max_count = current_count
-        max_value = current_value
-
-    return max_value, max_count
+    return max_val, max_count
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def smooth_radius(dt, nz, ny, nx):
+def smooth_radius(dt):
+    nz, ny, nx = dt.shape
     # print("smoothing R", end='', flush=True)
-
     # 初始化delta R数组
     del_rrr = np.zeros_like(dt)
     # print("*", end='', flush=True)
-
     # 第一部分：计算delta R
-    for k in range(nz):
-        for j in range(ny):
-            for i in range(nx):
+    for k in nb.prange(nz):
+        for j in nb.prange(ny):
+            for i in nb.prange(nx):
                 if dt[k, j, i] == 0:
                     continue  # 简化原代码中seg.value==0的判断
 
@@ -1235,9 +1223,9 @@ def smooth_radius(dt, nz, ny, nx):
     # print("*", end='', flush=True)
     #
     # 第二部分：应用平滑
-    for k in range(nz):
-        for j in range(ny):
-            for i in range(nx):
+    for k in nb.prange(nz):
+        for j in nb.prange(ny):
+            for i in nb.prange(nx):
                 if dt[k, j, i] == 0:
                     continue
 
@@ -1265,7 +1253,5 @@ def smooth_radius(dt, nz, ny, nx):
     # print("*", end='', flush=True)
 
     # 计算最大半径
-    max_r = np.max(dt)
-    print(f" maxrrr {max_r}")
-
+    print(f"maxrrr {np.max(dt)}")
     return dt
