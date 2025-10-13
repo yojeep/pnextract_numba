@@ -104,16 +104,16 @@ class Balls_cls:
 _mp5 = np.float32(-0.5)
 
 
-img = np.fromfile(
-    r"D:\yjp\Workdir\Code\ZJU\Study\Python\multi-physic-network-model\Papers\0\Data\_N2.500_sample0\pne\image_125_125_125.raw",
-    dtype=np.uint8,
-).reshape((125, 125, 125))
-
-
 # img = np.fromfile(
-#     r"C:\Users\yjp\Desktop\fsdownload\0.raw",
+#     r"D:\yjp\Workdir\Code\ZJU\Study\Python\multi-physic-network-model\Papers\0\Data\_N2.500_sample0\pne\image_125_125_125.raw",
 #     dtype=np.uint8,
-# ).reshape((6000, 960, 560))
+# ).reshape((125, 125, 125))
+
+
+img = np.fromfile(
+    r"C:\Users\yjp\Desktop\fsdownload\0.raw",
+    dtype=np.uint8,
+).reshape((6000, 960, 560))
 img_bool = img == 0
 
 
