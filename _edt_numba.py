@@ -119,3 +119,30 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
 
     else:
         raise ValueError("Only 2D and 3D binary images are supported.")
+
+
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
+def nb_classic_edt(binary_img, _clipROutyz=0.5, _clipROutx=0.5):
+    dt = nb_edt(binary_img)
+    nz, ny, nx = dt.shape
+    for z in nb.prange(nz):
+        for y in nb.prange(ny):
+            for x in nb.prange(nx):
+                if binary_img[z, y, x]:
+                    limit = dt[z, y, x] - 0.5
+                    iSqr = min((y + 2), (ny - y + 1))
+                    if iSqr < limit:
+                        limit = max(
+                            (1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01
+                        )
+                    iSqr = min((z + 2), (nz - z + 1))
+                    if iSqr < limit:
+                        limit = max(
+                            (1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01
+                        )
+                    iSqr = min((x + 2), (nx - x + 1))
+                    if iSqr < limit:
+                        limit = max((1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1)
+                    # 第五步：更新 dt
+                    dt[z, y, x] = limit
+    return dt
