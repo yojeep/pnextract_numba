@@ -142,7 +142,9 @@ def nb_classic_edt(binary_img, _clipROutyz=0.5, _clipROutx=0.5):
                         )
                     iSqr = min((x + 2), (nx - x + 1))
                     if iSqr < limit:
-                        limit = max((1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1)
+                        limit = max(
+                            (1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.01
+                        )  # limit = max((1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1)
                     # 第五步：更新 dt
                     dt[z, y, x] = limit
     return dt

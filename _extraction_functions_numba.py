@@ -8,7 +8,7 @@ from numba.typed import Dict
 _mp5 = np.float32(-0.5)
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def nb_parallel_sum(arr):
     arr = arr.reshape(-1)
     _sum = 0
@@ -17,7 +17,7 @@ def nb_parallel_sum(arr):
     return _sum
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def nb_where(arr, nVxls):
     indices = np.empty(nVxls, dtype=np.int64)
     _, ny, nx = arr.shape
@@ -42,7 +42,7 @@ def nb_where(arr, nVxls):
     return zsysxs
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def smooth_radius(img_bool, dt, zsysxs_v):
     nz, ny, nx = dt.shape
     print("smoothing R")
@@ -88,14 +88,14 @@ def smooth_radius(img_bool, dt, zsysxs_v):
     return dt
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def get_masterball(ball_boss, ball_index):
     while ball_boss[ball_index] != ball_index:
         ball_index = ball_boss[ball_index]
     return ball_index
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def get_ball_level(ball_boss, ball_index):
     level = 1
     current = ball_index
@@ -105,7 +105,7 @@ def get_ball_level(ball_boss, ball_index):
     return level
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def inParents(ball_boss, ball_index_i, ball_index_j):
     """判断 ball_j 是否是 ball_i 的祖先（父节点或更高层级父节点）"""
     current = ball_boss[ball_index_i]  # 当前检查的节点
@@ -117,7 +117,7 @@ def inParents(ball_boss, ball_index_i, ball_index_j):
         current = ball_boss[current]  # 继续检查父节点
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def paradox_pre_removeincludedballI(image, dt, isball, _minRp):
     nz, ny, nx = image.shape
     zs = np.arange(0, nz - 1, 2)
@@ -147,7 +147,7 @@ def paradox_pre_removeincludedballI(image, dt, isball, _minRp):
                         isball[max_z, max_y, max_x] = True
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def paradox_removeincludedballI(
     ball_indices, ball_R, image, dt, isball, _RCorsnf, _RCorsn, _MSNoise
 ):
@@ -166,13 +166,13 @@ def paradox_removeincludedballI(
         for c in range(-ez, ez + 1):
             c_sq = c * c
             temp = ripinc_sq - c_sq
-            if temp <= 0:
+            if temp < 0:
                 continue
             ey = int(np.sqrt(temp))
             for b in range(-ey, ey + 1):
                 b_sq = b * b
                 temp = ripinc_sq - c_sq - b_sq
-                if temp <= 0:
+                if temp < 0:
                     continue
                 ex = int(np.sqrt(temp))
                 for a in range(-ex, ex + 1):
@@ -196,30 +196,20 @@ def paradox_removeincludedballI(
     print(f"removed ball {removed_ball}")
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
     nz, ny, nx = image.shape
     for i in nb.prange(ball_indices.shape[0]):
         disp = np.array([0, 0, 0])
-        fz, fy, fx = ball_findices[i]
-        fz_int = int(fz)
-        fy_int = int(fy)
-        fx_int = int(fx)
-        vi_r = dt[fz_int, fy_int, fx_int]
-        vjm_z = fz_int - 1
-        vjm_y = fy_int
-        vjm_x = fx_int
-        vjp_z = fz_int + 1
-        vjp_y = fy_int
-        vjp_x = fx_int
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        iz, iy, ix = ball_indices[i]
+        vi_r = dt[iz, iy, ix]
+        vjm_z = iz - 1
+        vjm_y = iy
+        vjm_x = ix
+        vjp_z = iz + 1
+        vjp_y = iy
+        vjp_x = ix
+        if 0 <= vjm_z and vjp_z < nz:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -228,20 +218,13 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
                 if abs(gp - gm) > 0.01:
                     disp[0] = max(-0.49, min(0.49, -0.5 * (gp + gm) / (gp - gm)))
 
-        vjm_z = fz_int
-        vjm_y = fy_int - 1
-        vjm_x = fx_int
-        vjp_z = fz_int
-        vjp_y = fy_int + 1
-        vjp_x = fx_int
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        vjm_z = iz
+        vjm_y = iy - 1
+        vjm_x = ix
+        vjp_z = iz
+        vjp_y = iy + 1
+        vjp_x = ix
+        if 0 <= vjm_y and vjp_y < ny:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -250,20 +233,13 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
                 if abs(gp - gm) > 0.01:
                     disp[1] = max(-0.49, min(0.49, -0.5 * (gp + gm) / (gp - gm)))
 
-        vjm_z = fz_int
-        vjm_y = fy_int
-        vjm_x = fx_int - 1
-        vjp_z = fz_int
-        vjp_y = fy_int
-        vjp_x = fx_int + 1
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        vjm_z = iz
+        vjm_y = iy
+        vjm_x = ix - 1
+        vjp_z = iz
+        vjp_y = iy
+        vjp_x = ix + 1
+        if 0 <= vjm_x and vjp_x < nx:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -277,34 +253,24 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
             disp[0] ** 2 + disp[1] ** 2 + disp[2] ** 2
         )
         ball_R[i] = R_modified
-        dt[ball_indices[i, 0], ball_indices[i, 1], ball_indices[i, 2]] = R_modified
+        dt[iz, iy, ix] = R_modified
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
-def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
+def moveUphillp1(ball_indices, ball_R, image, dt, isball):
     nz, ny, nx = image.shape
     for i in range(ball_indices.shape[0]):
         disp = np.array([0.0, 0.0, 0.0])
         grad = np.array([0.0, 0.0, 0.0])
-        fz, fy, fx = ball_findices[i]
-        fz_int = int(fz)
-        fy_int = int(fy)
-        fx_int = int(fx)
-        vi_r = dt[fz_int, fy_int, fx_int]
-        vjm_z = fz_int - 1
-        vjm_y = fy_int
-        vjm_x = fx_int
-        vjp_z = fz_int + 1
-        vjp_y = fy_int
-        vjp_x = fx_int
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        iz, iy, ix = ball_indices[i]
+        vi_r = dt[iz, iy, ix]
+        vjm_z = iz - 1
+        vjm_y = iy
+        vjm_x = ix
+        vjp_z = iz + 1
+        vjp_y = iy
+        vjp_x = ix
+        if 0 <= vjm_z and vjp_z < nz:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -313,20 +279,13 @@ def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
                 grad[0] = 0.5 * (gp + gm)
                 if abs(gp - gm) > 0.01:
                     disp[0] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
-        vjm_z = fz_int
-        vjm_y = fy_int - 1
-        vjm_x = fx_int
-        vjp_z = fz_int
-        vjp_y = fy_int + 1
-        vjp_x = fx_int
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        vjm_z = iz
+        vjm_y = iy - 1
+        vjm_x = ix
+        vjp_z = iz
+        vjp_y = iy + 1
+        vjp_x = ix
+        if 0 <= vjm_y and vjp_y < ny:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -335,20 +294,13 @@ def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
                 grad[1] = 0.5 * (gp + gm)
                 if abs(gp - gm) > 0.01:
                     disp[1] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
-        vjm_z = fz_int
-        vjm_y = fy_int
-        vjm_x = fx_int - 1
-        vjp_z = fz_int
-        vjp_y = fy_int
-        vjp_x = fx_int + 1
-        if (
-            0 <= vjm_z < nz
-            and 0 <= vjm_y < ny
-            and 0 <= vjm_x < nx
-            and 0 <= vjp_z < nz
-            and 0 <= vjp_y < ny
-            and 0 <= vjp_x < nx
-        ):
+        vjm_z = iz
+        vjm_y = iy
+        vjm_x = ix - 1
+        vjp_z = iz
+        vjp_y = iy
+        vjp_x = ix + 1
+        if 0 <= vjm_x and vjp_x < nx:
             if image[vjm_z, vjm_y, vjm_x] and image[vjp_z, vjp_y, vjp_x]:
                 vjm_r = dt[vjm_z, vjm_y, vjm_x]
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
@@ -359,38 +311,37 @@ def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
                     disp[2] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
         disp += 1.4 * grad
         disp /= 0.55 * LA.norm(disp) + 0.05
-        vxlj_z = int(fz_int + disp[0])
-        vxlj_y = int(fy_int + disp[1])
-        vxlj_x = int(fx_int + disp[2])
+        vxlj_z = int(iz + disp[0])
+        vxlj_y = int(iy + disp[1])
+        vxlj_x = int(ix + disp[2])
         if (
             0 <= vxlj_z < nz
             and 0 <= vxlj_y < ny
             and 0 <= vxlj_x < nx
-            and (vxlj_z != fz_int or vxlj_y != fy_int or vxlj_x != fx_int)
+            and (vxlj_z != iz or vxlj_y != iy or vxlj_x != ix)
         ):
             if (
                 ~isball[vxlj_z, vxlj_y, vxlj_x]
                 and dt[vxlj_z, vxlj_y, vxlj_x] > ball_R[i]
             ):
-                z, y, x = ball_indices[i]
-                isball[z, y, x] = False
+                isball[iz, iy, ix] = False
                 isball[vxlj_z, vxlj_y, vxlj_x] = True
-                ball_findices[i, 0] = vxlj_z - _mp5
-                ball_findices[i, 1] = vxlj_y - _mp5
-                ball_findices[i, 2] = vxlj_x - _mp5
-                ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
-                ball_indices[i, 0] = vxlj_z
-                ball_indices[i, 1] = vxlj_y
-                ball_indices[i, 2] = vxlj_x
+                # ball_findices[i, 0] = vxlj_z - _mp5
+                # ball_findices[i, 1] = vxlj_y - _mp5
+                # ball_findices[i, 2] = vxlj_x - _mp5
+                # ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
+                # ball_indices[i, 0] = vxlj_z
+                # ball_indices[i, 1] = vxlj_y
+                # ball_indices[i, 2] = vxlj_x
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
     if ball_R[vj] > ball_R[vi]:
         vi, vj = vj, vi
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def competeForParent(
     vi,
     vj,
@@ -571,13 +522,13 @@ def competeForParent(
                                 vj = pvj
                                 leveli += 1
                                 levelj -= 1
-                            vi, vj = vj, vi
+                            # vi, vj = vj, vi
                             # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj)
 
                             # make friends
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def findBoss(
     ball_indices,
     ball_findices,
@@ -612,13 +563,13 @@ def findBoss(
         zpcs = np.arange(2.0 * z - ez, ez + 0.001, 1.0)
         for zpc in zpcs:
             temp = ripp * ripp - (zpc - z) * (zpc - z)
-            if temp <= 0:
+            if temp < 0:
                 continue
             ey = y + np.sqrt(temp)
             ypbs = np.arange(2.0 * y - ey, ey + 0.001, 1.0)
             for ypb in ypbs:
                 temp = ripp * ripp - (zpc - z) * (zpc - z) - (ypb - y) * (ypb - y)
-                if temp <= 0:
+                if temp < 0:
                     continue
                 ex = x + np.sqrt(temp)
                 xpas = np.arange(2.0 * x - ex, ex + 0.001, 1.0)
@@ -630,7 +581,7 @@ def findBoss(
                         0 <= zpc < nz
                         and 0 <= ypb < ny
                         and 0 <= xpa < nx
-                        and not (zpc == 0 and ypb == 0 and xpa == 0)
+                        and (zpc != 0 or ypb != 0 or xpa != 0)
                     ):
                         if isball[zpc, ypb, xpa]:
                             vj = whichball[zpc * ny * nx + ypb * nx + xpa]
