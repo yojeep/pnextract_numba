@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import time
 
 os.environ["NUMBA_OPT"] = "max"
@@ -103,12 +104,8 @@ class Balls_cls:
 t0 = time.time()
 _mp5 = np.float32(-0.5)
 
-
-img = np.fromfile(
-    r"D:\yjp\Workdir\Code\ZJU\Study\Python\multi-physic-network-model\Papers\0\Data\_N2.500_sample0\pne\image_125_125_125.raw",
-    dtype=np.uint8,
-).reshape((125, 125, 125))
-
+Path_img = Path(r"./image_500_500_500.npz")
+img = np.load(Path_img)["arr_0"]
 
 # img = np.fromfile(
 #     r"C:\Users\yjp\Desktop\fsdownload\0.raw",
@@ -124,7 +121,7 @@ zsysxs_v = nb_where(img_bool, nVxls)
 # _clipROutyz=0.98, _clipROutx=0.05
 
 # print(nb_where.inspect_types())
-dt = nb_classic_edt(img_bool, _clipROutyz=0.98, _clipROutx=0.98)
+dt = nb_classic_edt(img_bool, _clipROutyz=0.98, _clipROutx=0.05)
 # dt = edt(img_bool, black_border=True)
 # plt.imshow(dt[3])
 # plt.show()
@@ -309,7 +306,10 @@ print("*" * 20)
 print(f"num_pores:{len(poreIs)}")
 print("*" * 20)
 print(f"time_cost:{time.time() - t0}")
-plt.imshow(VElems[1])
-plt.show()
-
-# VElems.astype(np.int32).tofile("VElems.raw")
+# plt.imshow(VElems[1])
+# plt.show()
+VElems = VElems[1:-1, 1:-1, 1:-1]
+# VElems.astype(np.int32).tofile(Path_img.with_name(Path_img.stem + "_python_pne.raw"))
+np.savez_compressed(
+    Path_img.with_name(Path_img.stem + "_python_pne.npz"), VElems.astype(np.int32)
+)
