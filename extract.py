@@ -124,7 +124,7 @@ zsysxs_v = nb_where(img_bool, nVxls)
 # _clipROutyz=0.98, _clipROutx=0.05
 
 # print(nb_where.inspect_types())
-dt = nb_classic_edt(img_bool, _clipROutyz=0.98, _clipROutx=0.05)
+dt = nb_classic_edt(img_bool, _clipROutyz=0.98, _clipROutx=0.98)
 # dt = edt(img_bool, black_border=True)
 # plt.imshow(dt[3])
 # plt.show()

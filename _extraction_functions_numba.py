@@ -1,7 +1,6 @@
-from xml.dom import WRONG_DOCUMENT_ERR
 import numpy as np
 import numba as nb
-from numpy import linalg as LA
+# from numpy import linalg as LA
 from numba.core import types
 from numba.typed import Dict
 
@@ -260,8 +259,12 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
 def moveUphillp1(ball_indices, ball_R, image, dt, isball):
     nz, ny, nx = image.shape
     for i in range(ball_indices.shape[0]):
-        disp = np.array([0.0, 0.0, 0.0])
-        grad = np.array([0.0, 0.0, 0.0])
+        disp_z = 0.0
+        disp_y = 0.0
+        disp_x = 0.0
+        grad_z = 0.0
+        grad_y = 0.0
+        grad_x = 0.0
         iz, iy, ix = ball_indices[i]
         vi_r = dt[iz, iy, ix]
         vjm_z = iz - 1
@@ -276,9 +279,9 @@ def moveUphillp1(ball_indices, ball_R, image, dt, isball):
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
                 gp = vjp_r - vi_r
                 gm = vi_r - vjm_r
-                grad[0] = 0.5 * (gp + gm)
+                grad_z = 0.5 * (gp + gm)
                 if abs(gp - gm) > 0.01:
-                    disp[0] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
+                    disp_z = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
         vjm_z = iz
         vjm_y = iy - 1
         vjm_x = ix
@@ -291,9 +294,9 @@ def moveUphillp1(ball_indices, ball_R, image, dt, isball):
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
                 gp = vjp_r - vi_r
                 gm = vi_r - vjm_r
-                grad[1] = 0.5 * (gp + gm)
+                grad_y = 0.5 * (gp + gm)
                 if abs(gp - gm) > 0.01:
-                    disp[1] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
+                    disp_y = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
         vjm_z = iz
         vjm_y = iy
         vjm_x = ix - 1
@@ -306,14 +309,19 @@ def moveUphillp1(ball_indices, ball_R, image, dt, isball):
                 vjp_r = dt[vjp_z, vjp_y, vjp_x]
                 gp = vjp_r - vi_r
                 gm = vi_r - vjm_r
-                grad[2] = 0.5 * (gp + gm)
+                grad_x = 0.5 * (gp + gm)
                 if abs(gp - gm) > 0.01:
-                    disp[2] = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
-        disp += 1.4 * grad
-        disp /= 0.55 * LA.norm(disp) + 0.05
-        vxlj_z = int(iz + disp[0])
-        vxlj_y = int(iy + disp[1])
-        vxlj_x = int(ix + disp[2])
+                    disp_x = max(-0.59, min(0.59, -0.5 * (gp + gm) / (gp - gm)))
+        disp_z += 1.4 * grad_z
+        disp_y += 1.4 * grad_y
+        disp_x += 1.4 * grad_x
+        disp_norm = 0.55 * np.sqrt(disp_z ** 2 + disp_y ** 2 + disp_x ** 2) + 0.05
+        disp_z /= disp_norm
+        disp_y /= disp_norm
+        disp_x /= disp_norm
+        vxlj_z = int(iz + disp_z)
+        vxlj_y = int(iy + disp_y)
+        vxlj_x = int(ix + disp_x)
         if (
             0 <= vxlj_z < nz
             and 0 <= vxlj_y < ny
@@ -402,9 +410,9 @@ def competeForParent(
                         bvj = ball_boss[vj]
                         bvi_R = ball_R[bvi]
                         bvj_R = ball_R[bvj]
-                        dist_vivj = LA.norm(ball_findices[vi] - ball_findices[vj])
-                        dist_bvi_vi = LA.norm(ball_findices[bvi] - ball_findices[vi])
-                        dist_bvj_vj = LA.norm(ball_findices[bvj] - ball_findices[vj])
+                        dist_vivj = np.sqrt(np.sum((ball_findices[vi] - ball_findices[vj]) ** 2))
+                        dist_bvi_vi = np.sqrt(np.sum((ball_findices[bvi] - ball_findices[vi]) ** 2))
+                        dist_bvj_vj = np.sqrt(np.sum((ball_findices[bvj] - ball_findices[vj]) ** 2))
                         if leveli + 1 < levelj and (bvj_R - rj + 2.0 * noise) / (
                             dist_bvj_vj + 0.25
                         ) < (ri - rj + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
@@ -485,18 +493,18 @@ def competeForParent(
                             leveli = get_ball_level(ball_boss, vi)
                             levelj = get_ball_level(ball_boss, vj)
                             distAvg = (
-                                LA.norm(ball_findices[mvj] - ball_findices[mvi])
+                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[mvi]) ** 2))
                                 + 0.5 * noise
                             )
                             while leveli >= levelj and (
                                 ball_R[ball_boss[vi]] - ball_R[vi] + 0.55 * noise
                             ) / (
-                                LA.norm(ball_findices[mvi] - ball_findices[vi])
+                                np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vi]) ** 2))
                                 + distAvg
                             ) < (
                                 ball_R[vj] - ball_R[vi] + 0.5 * noise
                             ) / (
-                                LA.norm(ball_findices[mvj] - ball_findices[vi])
+                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vi]) ** 2))
                                 + distAvg
                             ):
                                 pvi = ball_boss[vi]
@@ -508,12 +516,12 @@ def competeForParent(
                             while levelj >= leveli and (
                                 ball_R[ball_boss[vj]] - ball_R[vj] + 0.55 * noise
                             ) / (
-                                LA.norm(ball_findices[mvj] - ball_findices[vj])
+                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vj]) ** 2))
                                 + distAvg
                             ) < (
                                 ball_R[vi] - ball_R[vj] + 0.5 * noise
                             ) / (
-                                LA.norm(ball_findices[mvi] - ball_findices[vj])
+                                np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vj]) ** 2))
                                 + distAvg
                             ):
                                 pvj = ball_boss[vj]
