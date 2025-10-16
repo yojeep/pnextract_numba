@@ -7,10 +7,8 @@ os.environ["NUMBA_SLP_VECTORIZE"] = "1"
 os.environ["NUMBA_ENABLE_AVX"] = "1"
 import numpy as np
 from _edt_numba import nb_classic_edt, nb_edt as edt
-import numba as nb
-import numpy.linalg as LA
-import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter
+# import matplotlib.pyplot as plt
+# from scipy.ndimage import gaussian_filter
 from _extraction_functions_numba import (
     _mp5,
     nb_parallel_sum,
