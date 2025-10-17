@@ -39,7 +39,7 @@ from pathlib import Path
 import numpy as np
 import time
 
-Path_img = Path(r"./image_500_500_500.npz")
+Path_img = Path(r"./Data/image_500_500_500.npz")
 img = np.load(Path_img)["arr_0"]
 
 img_bool = img == 0
