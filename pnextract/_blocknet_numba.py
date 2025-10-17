@@ -1,6 +1,6 @@
 import numba as nb
 import numpy as np
-from _extraction_functions_numba import get_masterball
+from ._extraction_functions_numba import get_masterball
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
