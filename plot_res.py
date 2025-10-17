@@ -15,7 +15,7 @@ for i, slice_ in enumerate(slices):
     axs[i, 0].imshow(image_classical_pne[slice_])
     axs[i, 0].set_title(f"Classical PNE, Slice {slice_}", fontsize=9)
     axs[i, 1].imshow(image_python_pne[slice_])
-    axs[i, 1].set_title(f"Python PNE, Slice {slice_}", fontsize=9)
+    axs[i, 1].set_title(f"Pnextract_numba, Slice {slice_}", fontsize=9)
 
 plt.subplots_adjust(wspace=0.1, hspace=0.1)
 plt.tight_layout(pad=0.5)

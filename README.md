@@ -74,7 +74,7 @@ We tested three configurations on the same input image(image_500_500_500.npz):
 | Classical PNE (64 Threads)    | 64      | 1832      | 48.0 s        | Parallelized C++      |
 | pnextract_numba (64 Threads)  | 64      | 1922      | 39.5s         | Python implementation |
 
-![pnextract_numba vs Classical PNE](pnextract_numba.png)
+![Classical PNE vs pnextract_numba](pnextract_numba.png)
 
 To reproduce the benchmark results, download the `image_500_500_500.npz` file and run the provided `sample.py classical_extract.py plot_res.py` scripts.
 
