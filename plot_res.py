@@ -2,8 +2,8 @@ from email.mime import image
 import matplotlib.pyplot as plt
 import numpy as np
 
-image_classical_pne = np.load(r"image_500_500_500_classical_pne.npz")["arr_0"]
-image_python_pne = np.load(r"image_500_500_500_python_pne.npz")["arr_0"]
+image_classical_pne = np.load(r"./Data/image_500_500_500_classical_pne.npz")["arr_0"]
+image_python_pne = np.load(r"./Data/image_500_500_500_python_pne.npz")["arr_0"]
 
 slices = [0, 100, 200, 300, 400]
 

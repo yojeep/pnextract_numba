@@ -4,7 +4,7 @@ import numpy as np
 import time
 
 t0 = time.time()
-Path_img = Path(r"./image_500_500_500.npz")
+Path_img = Path(r"./Data/image_500_500_500.npz")
 img = np.load(Path_img)["arr_0"]
 img = img == 1
 
