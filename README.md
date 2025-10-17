@@ -78,11 +78,6 @@ We tested three configurations on the same input image(image_500_500_500.npz):
 To reproduce the benchmark results, download the `Data` folder and run the provided `classical_extract.py pnextract_numba_sample.py plot_res.py` scripts.
 
 ---
-## 🙏 Acknowledgements
-
-
-
----
 ## 📜 License
 This project is licensed under the `Apache License 2.0`. See the [LICENSE](LICENSE) file for details.
 
