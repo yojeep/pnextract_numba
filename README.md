@@ -1,11 +1,15 @@
 # Pore Network Segmentation (Pure Python Implementation)
 
-This repository provides a pure Python implementation for **pore network segmentation** that approximates the behavior of the classical Pore Network Extraction (PNE) method (https://github.com/ImperialCollegeLondon/pnextract). 
+This repository provides a pure Python implementation for **pore network segmentation** that approximates the behavior of the [**classical Pore Network Extraction (PNE) method**](https://github.com/ImperialCollegeLondon/pnextract). 
 The focus is on **robust, maintainable code** with performance acceleration via **Numba**, while remaining fully compatible with the Python scientific ecosystem.
 
 > ⚠️ **Note**: This module performs **segmentation only**—it does **not** extract the network topology (e.g., pores, throats, connectivity). Network extraction will be added in future modules.
 
 ---
+
+## 🙏 Acknowledgements
+
+I sincerely thank the [**Pore-Scale Modelling and Imaging Research Group**](https://www.imperial.ac.uk/earth-science/research/research-groups/pore-scale-modelling/) at Imperial College London for their meticulous research and for making their code openly available. Their dedication to pore-scale modelling and imaging has greatly facilitated this work.
 
 ## 📌 Features
 
