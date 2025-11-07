@@ -2,21 +2,21 @@
 
 ## Notation
 
-| Symbol                                   | Meaning                                                                      |
-| ---------------------------------------- | ---------------------------------------------------------------------------- |
-| $ R_p $                                  | Radius of pore $ p $                                                         |
-| $ R_t $                                  | Radius of throat $ t $                                                       |
-| $ \mathbf{x}_p $                         | Center coordinate of pore $ p $ (from its medial ball)                       |
-| $ \mathbf{x}_t $                         | Center coordinate of throat $ t $ (from its medial ball)                     |
-| $ \mathbf{C}_t = (C_x, C_y, C_z) $       | Discrete cross-sectional vector of throat $ t $                              |
-| $ A_t = \|\mathbf{C}_t\| $               | Effective cross-sectional area of throat $ t $                               |
-| $ V_p $                                  | Volume of pore $ p $                                                         |
-| $ S_p $                                  | Surface area of pore $ p $                                                   |
-| $ l_{pt}^{(1)}, l_{pt}^{(2)} $           | Distances from throat center to centers of adjacent pores                    |
-| $ L_{12} = l_{pt}^{(1)} + l_{pt}^{(2)} $ | Total center-to-center distance between two connected pores via throat $ t $ |
-| $ G_t $                                  | Shape factor of throat $ t $                                                 |
-| $ G_p $                                  | Effective shape factor of pore $ p $                                         |
-| $ \mathcal{T}(p) $                       | Set of throats connected to pore $ p $                                       |
+| Symbol                                     | Meaning                                                                       |
+| ------------------------------------------ | ----------------------------------------------------------------------------- |
+| $ R_p $                                  | Radius of pore$ p $                                                         |
+| $ R_t $                                  | Radius of throat$ t $                                                       |
+| $ \mathbf{x}_p $                         | Center coordinate of pore$ p $ (from its medial ball)                       |
+| $ \mathbf{x}_t $                         | Center coordinate of throat$ t $ (from its medial ball)                     |
+| $ \mathbf{C}_t = (C_x, C_y, C_z) $       | Discrete cross-sectional vector of throat$ t $                              |
+| $ A_t = \|\mathbf{C}_t\| $               | Effective cross-sectional area of throat$ t $                               |
+| $ V_p $                                  | Volume of pore$ p $                                                         |
+| $ S_p $                                  | Surface area of pore$ p $                                                   |
+| $ l_{pt}^{(1)}, l_{pt}^{(2)} $           | Distances from throat center to centers of adjacent pores                     |
+| $ L_{12} = l_{pt}^{(1)} + l_{pt}^{(2)} $ | Total center-to-center distance between two connected pores via throat$ t $ |
+| $ G_t $                                  | Shape factor of throat$ t $                                                 |
+| $ G_p $                                  | Effective shape factor of pore$ p $                                         |
+| $ \mathcal{T}(p) $                       | Set of throats connected to pore$ p $                                       |
 
 ---
 
@@ -38,10 +38,12 @@ $$
 R_t = \min\left( \max(R_t^{\text{mb}},\, 0.5),\, R_{p_1},\, R_{p_2} \right) + \delta
 $$
 
-- $ R_t^{\text{mb}} $: radius of the maximal inscribed sphere (medial ball) at the throat  
-- $ \delta \sim \mathcal{U}(-0.25,\, +0.25) $: small random perturbation for numerical stability  
-  - Implemented as:  
-    $$ \delta = 0.5 \times \left(0.5 - \frac{\texttt{rand()}}{\texttt{RAND\_MAX}}\right) $$
+- $ R_t^{\text{mb}} $: radius of the maximal inscribed sphere (medial ball) at the throat
+- $ \delta \sim \mathcal{U}(-0.25,\, +0.25) $: small random perturbation for numerical stability
+  - Implemented as:
+    $$
+    \delta = 0.5 \times \left(0.5 - \frac{\texttt{rand()}}{\texttt{RAND\_MAX}}\right)
+    $$
 
 ---
 
@@ -67,7 +69,7 @@ $$
 
 ---
 
-### 3. Half-Lengths and Throat Segment Length
+### 3. Pore  Lengths and Throat Length
 
 Distance from throat center to each adjacent pore center:
 
@@ -172,11 +174,12 @@ $$
 Let $ V_p^{\text{orig}} $ be the original geometric volume of pore $ p $ (counted during voxel labeling). Then:
 
 - Adjusted pore volume:
+
   $$
   V_p = V_p^{\text{orig}} \cdot \frac{A_p}{A_{\text{total}}}
   $$
-
 - Each connected throat $ t $ receives a volume share:
+
   $$
   V_t \mathrel{+}= V_p^{\text{orig}} \cdot \frac{A_t}{A_{\text{total}}}
   $$
