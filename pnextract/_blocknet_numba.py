@@ -34,10 +34,7 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
     poreIs = np.where(ball_boss == np.arange(ball_boss.shape[0]))[0]
     for ind in nb.prange(poreIs.size):
         pore_ind = poreIs[ind]
-        z, y, x = ball_indices[pore_ind]
-        z += 1
-        y += 1
-        x += 1
+        z, y, x = ball_indices[pore_ind] + 1
         VElems[z, y, x] = ind
 
     for ball_index in range(ball_findices.shape[0]):
@@ -548,4 +545,15 @@ def refine_with_master_ball(VElems, ball_boss, ball_indices):
         zi, yi, xi = ball_indices[ipar]
         zm, ym, xm = ball_indices[ball_master]
         VElems[zi + 1, yi + 1, xi + 1] = VElems[zm + 1, ym + 1, xm + 1]
+    return VElems
+
+
+@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
+def refine_with_boss_ball(VElems, ball_boss, ball_indices):
+    nBalls = ball_indices.shape[0]
+    for ipar in nb.prange(nBalls):
+        ball_index = np.int32(ipar)
+        if ball_index == ball_boss[ball_index]:
+            zi, yi, xi = ball_indices[ball_index]
+            VElems[zi + 1, yi + 1, xi + 1] = ball_index
     return VElems

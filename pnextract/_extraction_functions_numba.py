@@ -421,41 +421,40 @@ def competeForParent(
                             dist_bvi_vi + 0.25
                         ) < (rj - ri + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
                             ball_boss[vi] = vj
-                        else:
-                            if (
+                        elif(
                                 leveli > levelj
                                 and (bvi_R - ri + 2.0 * noise) / (dist_bvi_vi + 1.2)
                                 < (rj - ri + 2.0 * noise) / (dist_vivj + 1.3)
                                 and not inParents(ball_boss, vj, vi)
                             ):
                                 ball_boss[vi] = vj
-                            elif (
-                                leveli < levelj
-                                and (bvj_R - rj + 2.0 * noise) / (dist_bvj_vj + 1.2)
-                                < (ri - rj + 2.0 * noise) / (dist_vivj + 1.3)
-                                and not inParents(ball_boss, vi, vj)
-                            ):
-                                ball_boss[vj] = vi
-                            elif (
-                                dt[middlevxlz, middlevxly, middlevxlx]
-                                >= 0.45 * (ri + rj) - 1.0
-                                and np.sqrt(dSqr) < (ri + rj) * 0.5 + 2
-                            ):
-                                # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi,vj)
-                                vi, vj = vj, vi
-                                """
-                                def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
-                                    if ball_R[vj] > ball_R[vi]:
-                                    ball_R[vi], ball_R[vj] = ball_R[vj], ball_R[vi]
-                                    ball_boss[vi], ball_boss[vj] = ball_boss[vj], ball_boss[vi]
-                                    ball_indices[vi], ball_indices[vj] = ball_indices[vj], ball_indices[vi]
-                                    ball_findices[vi], ball_findices[vj] = ball_findices[vj], ball_findices[vi]
-                                """
-                        # elif ... make friends
-                        if get_masterball(ball_boss, vi) != get_masterball(
-                            ball_boss, vj
+                        elif (
+                            leveli < levelj
+                            and (bvj_R - rj + 2.0 * noise) / (dist_bvj_vj + 1.2)
+                            < (ri - rj + 2.0 * noise) / (dist_vivj + 1.3)
+                            and not inParents(ball_boss, vi, vj)
                         ):
-                            print("Warning: paradox")
+                            ball_boss[vj] = vi
+                        # elif (
+                        #     dt[middlevxlz, middlevxly, middlevxlx]
+                        #     >= 0.45 * (ri + rj) - 1.0
+                        #     and np.sqrt(dSqr) < (ri + rj) * 0.5 + 2
+                        # ):
+                        #     # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi,vj)
+                        #     vi, vj = vj, vi
+                            """
+                            def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
+                                if ball_R[vj] > ball_R[vi]:
+                                ball_R[vi], ball_R[vj] = ball_R[vj], ball_R[vi]
+                                ball_boss[vi], ball_boss[vj] = ball_boss[vj], ball_boss[vi]
+                                ball_indices[vi], ball_indices[vj] = ball_indices[vj], ball_indices[vi]
+                                ball_findices[vi], ball_findices[vj] = ball_findices[vj], ball_findices[vi]
+                            """
+                        # elif ... make friends
+                        # if get_masterball(ball_boss, vi) != get_masterball(
+                        #     ball_boss, vj
+                        # ):
+                        #     print("Warning: paradox")
                     else:  # mvi != mvj:
                         mvi_R = ball_R[mvi]
                         mvj_R = ball_R[mvj]

@@ -26,10 +26,8 @@ from ._blocknet_numba import (
     median_elem,
     retreat_pores_median,
     refine_with_master_ball,
+    refine_with_boss_ball,
 )
-
-_mp5 = np.float32(-0.5)
-
 
 class Defaults:
     def __init__(self, avgR):
@@ -93,9 +91,6 @@ class Balls_cls:
         self.indices = self.indices[sorted_indices]
         self.findices = self.findices[sorted_indices]
         self.R = self.R[sorted_indices]
-
-
-
 
 
 def extract(img_bool):
@@ -279,7 +274,6 @@ def extract(img_bool):
     VElems, _ = grow_pores_X2(zsysxs_v, VElems, 0, -1)
 
     VElems = median_elem(zsysxs_v, VElems, 0)
-    VElems = grow_pores_med_eqs_loose(zsysxs_v, VElems, 0, -1)
     VElems = refine_with_master_ball(VElems, Balls.boss, Balls.indices)
-
-
+    VElems = grow_pores_med_eqs_loose(zsysxs_v, VElems, 0, -1)
+    VElems = refine_with_boss_ball(VElems, Balls.boss, Balls.indices)
