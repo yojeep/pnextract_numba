@@ -12,6 +12,8 @@ VElems_pypne, pn = pypne.pnextract(img, verbose=True, n_workers=64)
 
 print(f"Time cost: {time.time() - t0:.4f} s")
 VElems_pypne = VElems_pypne[1:-1, 1:-1, 1:-1].astype(np.int32)
+print(VElems_pypne.shape)
+print(np.unique(VElems_pypne))
 np.savez_compressed(
     Path_img.with_name(Path_img.stem + "_classical_pne.npz"), VElems_pypne
 )

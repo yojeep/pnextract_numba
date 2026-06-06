@@ -3,7 +3,14 @@ import numpy as np
 from ._extraction_functions_numba import get_masterball
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
+@nb.njit(
+    parallel=False,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    inline="always",
+    forceinline=True,
+)
 def get_max_count_nei(neis):
     n = neis.size
     max_val = -1
@@ -99,10 +106,26 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
     return VElems, poreIs
 
 
+@nb.njit(
+    parallel=True,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    inline="always",
+    forceinline=True,
+)
+def assign_array(src, dst):
+    """展开: 显式三重 prange 逐元素赋值"""
+    src_flat = src.reshape(-1)
+    dst_flat = dst.reshape(-1)
+    for i in nb.prange(dst.size):
+        dst_flat[i] = src_flat[i]
+
+
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores(zsysxs_v, VElems, bgn, raw_value):
+def grow_pores(zsysxs_v, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -131,9 +154,9 @@ def grow_pores(zsysxs_v, VElems, bgn, raw_value):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores_X2(zsysxs_v, VElems, bgn, raw_value):
+def grow_pores_X2(zsysxs_v, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     # 第一次遍历：正向扫描
     n_changes = 0
     for ipar in nb.prange(nVxls):
@@ -161,7 +184,7 @@ def grow_pores_X2(zsysxs_v, VElems, bgn, raw_value):
     print(f"  ngrowX3:{n_changes},")
 
     n_changes = 0
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
         if voxls[i, j, k] == raw_value:
@@ -187,7 +210,7 @@ def grow_pores_X2(zsysxs_v, VElems, bgn, raw_value):
     print(f"{n_changes},")
 
     n_changes = 0
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
         if voxls[i, j, k] == raw_value:
@@ -216,9 +239,9 @@ def grow_pores_X2(zsysxs_v, VElems, bgn, raw_value):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores_med_strict(zsysxs_v, dt_p1, VElems, bgn, raw_value):
+def grow_pores_med_strict(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -271,13 +294,13 @@ def grow_pores_med_strict(zsysxs_v, dt_p1, VElems, bgn, raw_value):
                     n_changes += 1
 
     print(f"ngMedStrict changes: {n_changes}")
-    return voxls
+    return VElems
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores_median(zsysxs_v, dt_p1, VElems, bgn, raw_value):
+def grow_pores_median(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -328,9 +351,9 @@ def grow_pores_median(zsysxs_v, dt_p1, VElems, bgn, raw_value):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores_med_eqs(zsysxs_v, dt_p1, VElems, bgn, raw_value):
+def grow_pores_med_eqs(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -381,9 +404,9 @@ def grow_pores_med_eqs(zsysxs_v, dt_p1, VElems, bgn, raw_value):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def grow_pores_med_eqs_loose(zsysxs_v, VElems, bgn, raw_value):
+def grow_pores_med_eqs_loose(zsysxs_v, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -427,9 +450,9 @@ def grow_pores_med_eqs_loose(zsysxs_v, VElems, bgn, raw_value):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def median_elem(zsysxs_v, VElems, bgn):
+def median_elem(zsysxs_v, VElems, voxls, bgn):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
 
     for ipar in nb.prange(nVxls):
@@ -486,9 +509,9 @@ def median_elem(zsysxs_v, VElems, bgn):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def retreat_pores_median(zsysxs_v, VElems, bgn, raw_value):
+def retreat_pores_median(zsysxs_v, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
-    voxls = VElems.copy()
+    assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
         i, j, k = zsysxs_v[ipar]
@@ -539,7 +562,7 @@ def retreat_pores_median(zsysxs_v, VElems, bgn, raw_value):
 def refine_with_master_ball(VElems, ball_boss, ball_indices):
     nBalls = ball_indices.shape[0]
     for ipar in nb.prange(nBalls):
-        ball_master = np.int32(ipar)
+        ball_master = np.int64(ipar)
         while ball_boss[ball_master] != ball_master:
             ball_master = ball_boss[ball_master]
         zi, yi, xi = ball_indices[ipar]
@@ -549,11 +572,9 @@ def refine_with_master_ball(VElems, ball_boss, ball_indices):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True)
-def refine_with_boss_ball(VElems, ball_boss, ball_indices):
-    nBalls = ball_indices.shape[0]
-    for ipar in nb.prange(nBalls):
-        ball_index = np.int32(ipar)
-        if ball_index == ball_boss[ball_index]:
-            zi, yi, xi = ball_indices[ball_index]
-            VElems[zi + 1, yi + 1, xi + 1] = ball_index
+def refine_with_boss_ball(VElems, ball_indices, poreIs):
+    for ipar in nb.prange(poreIs.size):
+        ball_idx = poreIs[ipar]
+        zi, yi, xi = ball_indices[ball_idx]
+        VElems[zi + 1, yi + 1, xi + 1] = np.int32(ipar)
     return VElems

@@ -1,7 +1,7 @@
 import numba as nb
 import numpy as np
 
-INF_FLOAT32 = np.finfo(np.float32).max
+INF_FLOAT64 = np.finfo(np.float64).max
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -13,13 +13,13 @@ def nb_squared_edt_1d(f, w, apply_envelope):
     # Extract the 1D slice: f[0], f[stride], f[2*stride], ..., f[(n-1)*stride]
     ff = f.copy()
     # v: indices of parabolas in lower envelope
-    v = np.empty(n, dtype=np.int32)
+    v = np.empty(n, dtype=np.int64)
     # ranges: boundaries where each parabola dominates
-    ranges = np.empty(n + 1, dtype=np.float32)
+    ranges = np.empty(n + 1, dtype=np.float64)
     k = 0
     v[0] = 0
-    ranges[0] = -INF_FLOAT32
-    ranges[1] = INF_FLOAT32
+    ranges[0] = -INF_FLOAT64
+    ranges[1] = INF_FLOAT64
 
     # First pass: construct lower envelope
     for i in range(1, n):
@@ -37,7 +37,7 @@ def nb_squared_edt_1d(f, w, apply_envelope):
         k += 1
         v[k] = i
         ranges[k] = s
-        ranges[k + 1] = INF_FLOAT32
+        ranges[k + 1] = INF_FLOAT64
 
     k = 0
     # Optional: clamp to distance to image border (prevents bleed beyond edges)
@@ -84,7 +84,7 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
         Euclidean distance transform.
     """
     assert binary_img.dtype == np.dtype("bool"), "Input must be boolean array"
-    dist_sq = binary_img * INF_FLOAT32
+    dist_sq = binary_img * INF_FLOAT64
     if binary_img.ndim == 2:
         sx, sy = binary_img.shape
         # X-pass (along axis 0: columns)
@@ -94,7 +94,7 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
         for x in nb.prange(sx):
             nb_squared_edt_1d(dist_sq[x, :], wy, black_border)
         dist_sq = np.sqrt(dist_sq)
-        if dist_sq[0, 0] == INF_FLOAT32:
+        if dist_sq[0, 0] == INF_FLOAT64:
             dist_sq = np.full_like(dist_sq, np.inf)
         return dist_sq
 
@@ -113,7 +113,7 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
             for y in nb.prange(sy):
                 nb_squared_edt_1d(dist_sq[:, x, y], wz, black_border)
         dist_sq = np.sqrt(dist_sq)
-        if dist_sq[0, 0, 0] == INF_FLOAT32:
+        if dist_sq[0, 0, 0] == INF_FLOAT64:
             dist_sq = np.full_like(dist_sq, np.inf)
         return dist_sq
 

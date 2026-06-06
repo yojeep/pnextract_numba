@@ -1,5 +1,6 @@
 import numpy as np
 import numba as nb
+
 # from numpy import linalg as LA
 from numba.core import types
 from numba.typed import Dict
@@ -7,7 +8,15 @@ from numba.typed import Dict
 _mp5 = np.float32(-0.5)
 
 
-@nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
+@nb.njit(
+    parallel=True,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    error_model="numpy",
+    inline="always",
+    forceinline=True,
+)
 def nb_parallel_sum(arr):
     arr = arr.reshape(-1)
     _sum = 0
@@ -32,7 +41,7 @@ def nb_where(arr, nVxls):
     indices = indices // nx
     zs = indices // ny
     ys = indices % ny
-    zsysxs = np.empty((zs.size, 3), dtype=np.int32)
+    zsysxs = np.empty((zs.size, 3), dtype=np.int64)
     for ipar in nb.prange(zs.size):
         zsysxs_i = zsysxs[ipar]
         zsysxs_i[0] = zs[ipar]
@@ -87,14 +96,30 @@ def smooth_radius(img_bool, dt, zsysxs_v):
     return dt
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
+@nb.njit(
+    parallel=False,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    error_model="numpy",
+    inline="always",
+    forceinline=True,
+)
 def get_masterball(ball_boss, ball_index):
     while ball_boss[ball_index] != ball_index:
         ball_index = ball_boss[ball_index]
     return ball_index
 
 
-@nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
+@nb.njit(
+    parallel=False,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    error_model="numpy",
+    inline="always",
+    forceinline=True,
+)
 def get_ball_level(ball_boss, ball_index):
     level = 1
     current = ball_index
@@ -116,17 +141,18 @@ def inParents(ball_boss, ball_index_i, ball_index_j):
         current = ball_boss[current]  # 继续检查父节点
 
 
+# def paradox_pre_removeincludedballI(image, dt, isball, _minRp): Avoid too long name, due to numba cache limit
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
-def paradox_pre_removeincludedballI(image, dt, isball, _minRp):
+def paradox_pre_rmincludedballI(image, dt, isball, _minRp):
     nz, ny, nx = image.shape
     zs = np.arange(0, nz - 1, 2)
     ys = np.arange(0, ny - 1, 2)
     xs = np.arange(0, nx - 1, 2)
-    for z_id in nb.prange(len(zs)):
+    for z_id in nb.prange(zs.size):
         z = zs[z_id]
-        for y_id in nb.prange(len(ys)):
+        for y_id in nb.prange(ys.size):
             y = ys[y_id]
-            for x_id in nb.prange(len(xs)):
+            for x_id in nb.prange(xs.size):
                 x = xs[x_id]
                 if image[z, y, x]:
                     max_val = -np.inf
@@ -315,7 +341,7 @@ def moveUphillp1(ball_indices, ball_R, image, dt, isball):
         disp_z += 1.4 * grad_z
         disp_y += 1.4 * grad_y
         disp_x += 1.4 * grad_x
-        disp_norm = 0.55 * np.sqrt(disp_z ** 2 + disp_y ** 2 + disp_x ** 2) + 0.05
+        disp_norm = 0.55 * np.sqrt(disp_z**2 + disp_y**2 + disp_x**2) + 0.05
         disp_z /= disp_norm
         disp_y /= disp_norm
         disp_x /= disp_norm
@@ -410,9 +436,15 @@ def competeForParent(
                         bvj = ball_boss[vj]
                         bvi_R = ball_R[bvi]
                         bvj_R = ball_R[bvj]
-                        dist_vivj = np.sqrt(np.sum((ball_findices[vi] - ball_findices[vj]) ** 2))
-                        dist_bvi_vi = np.sqrt(np.sum((ball_findices[bvi] - ball_findices[vi]) ** 2))
-                        dist_bvj_vj = np.sqrt(np.sum((ball_findices[bvj] - ball_findices[vj]) ** 2))
+                        dist_vivj = np.sqrt(
+                            np.sum((ball_findices[vi] - ball_findices[vj]) ** 2)
+                        )
+                        dist_bvi_vi = np.sqrt(
+                            np.sum((ball_findices[bvi] - ball_findices[vi]) ** 2)
+                        )
+                        dist_bvj_vj = np.sqrt(
+                            np.sum((ball_findices[bvj] - ball_findices[vj]) ** 2)
+                        )
                         if leveli + 1 < levelj and (bvj_R - rj + 2.0 * noise) / (
                             dist_bvj_vj + 0.25
                         ) < (ri - rj + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
@@ -421,13 +453,13 @@ def competeForParent(
                             dist_bvi_vi + 0.25
                         ) < (rj - ri + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
                             ball_boss[vi] = vj
-                        elif(
-                                leveli > levelj
-                                and (bvi_R - ri + 2.0 * noise) / (dist_bvi_vi + 1.2)
-                                < (rj - ri + 2.0 * noise) / (dist_vivj + 1.3)
-                                and not inParents(ball_boss, vj, vi)
-                            ):
-                                ball_boss[vi] = vj
+                        elif (
+                            leveli > levelj
+                            and (bvi_R - ri + 2.0 * noise) / (dist_bvi_vi + 1.2)
+                            < (rj - ri + 2.0 * noise) / (dist_vivj + 1.3)
+                            and not inParents(ball_boss, vj, vi)
+                        ):
+                            ball_boss[vi] = vj
                         elif (
                             leveli < levelj
                             and (bvj_R - rj + 2.0 * noise) / (dist_bvj_vj + 1.2)
@@ -435,13 +467,13 @@ def competeForParent(
                             and not inParents(ball_boss, vi, vj)
                         ):
                             ball_boss[vj] = vi
-                        # elif (
-                        #     dt[middlevxlz, middlevxly, middlevxlx]
-                        #     >= 0.45 * (ri + rj) - 1.0
-                        #     and np.sqrt(dSqr) < (ri + rj) * 0.5 + 2
-                        # ):
-                        #     # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi,vj)
-                        #     vi, vj = vj, vi
+                            # elif (
+                            #     dt[middlevxlz, middlevxly, middlevxlx]
+                            #     >= 0.45 * (ri + rj) - 1.0
+                            #     and np.sqrt(dSqr) < (ri + rj) * 0.5 + 2
+                            # ):
+                            #     # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi,vj)
+                            #     vi, vj = vj, vi
                             """
                             def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
                                 if ball_R[vj] > ball_R[vi]:
@@ -492,18 +524,28 @@ def competeForParent(
                             leveli = get_ball_level(ball_boss, vi)
                             levelj = get_ball_level(ball_boss, vj)
                             distAvg = (
-                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[mvi]) ** 2))
+                                np.sqrt(
+                                    np.sum(
+                                        (ball_findices[mvj] - ball_findices[mvi]) ** 2
+                                    )
+                                )
                                 + 0.5 * noise
                             )
                             while leveli >= levelj and (
                                 ball_R[ball_boss[vi]] - ball_R[vi] + 0.55 * noise
                             ) / (
-                                np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vi]) ** 2))
+                                np.sqrt(
+                                    np.sum(
+                                        (ball_findices[mvi] - ball_findices[vi]) ** 2
+                                    )
+                                )
                                 + distAvg
-                            ) < (
-                                ball_R[vj] - ball_R[vi] + 0.5 * noise
-                            ) / (
-                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vi]) ** 2))
+                            ) < (ball_R[vj] - ball_R[vi] + 0.5 * noise) / (
+                                np.sqrt(
+                                    np.sum(
+                                        (ball_findices[mvj] - ball_findices[vi]) ** 2
+                                    )
+                                )
                                 + distAvg
                             ):
                                 pvi = ball_boss[vi]
@@ -515,12 +557,18 @@ def competeForParent(
                             while levelj >= leveli and (
                                 ball_R[ball_boss[vj]] - ball_R[vj] + 0.55 * noise
                             ) / (
-                                np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vj]) ** 2))
+                                np.sqrt(
+                                    np.sum(
+                                        (ball_findices[mvj] - ball_findices[vj]) ** 2
+                                    )
+                                )
                                 + distAvg
-                            ) < (
-                                ball_R[vi] - ball_R[vj] + 0.5 * noise
-                            ) / (
-                                np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vj]) ** 2))
+                            ) < (ball_R[vi] - ball_R[vj] + 0.5 * noise) / (
+                                np.sqrt(
+                                    np.sum(
+                                        (ball_findices[mvi] - ball_findices[vj]) ** 2
+                                    )
+                                )
                                 + distAvg
                             ):
                                 pvj = ball_boss[vj]
@@ -556,12 +604,14 @@ def findBoss(
     nBalls = ball_indices.shape[0]
     whichball = Dict.empty(
         key_type=types.int64,  # 或 types.int32，取决于你的索引范围
-        value_type=types.int32,
+        value_type=types.int64,
         n_keys=nBalls,
     )
-    keys = ball_indices[:, 0] * ny * nx + ball_indices[:, 1] * nx + ball_indices[:, 2]
+    keys = (
+        ball_indices[:, 0] * ny * nx + ball_indices[:, 1] * nx + ball_indices[:, 2]
+    ).astype(np.int64)
     for i in range(nBalls):
-        whichball[keys[i]] = np.int32(i)
+        whichball[keys[i]] = np.int64(i)
 
     for i in range(nBalls):
         z, y, x = ball_findices[i]
@@ -581,9 +631,9 @@ def findBoss(
                 ex = x + np.sqrt(temp)
                 xpas = np.arange(2.0 * x - ex, ex + 0.001, 1.0)
                 for xpa in xpas:
-                    zpc = np.int32(zpc)
-                    ypb = np.int32(ypb)
-                    xpa = np.int32(xpa)
+                    zpc = np.int64(zpc)
+                    ypb = np.int64(ypb)
+                    xpa = np.int64(xpa)
                     if (
                         0 <= zpc < nz
                         and 0 <= ypb < ny
@@ -593,7 +643,7 @@ def findBoss(
                         if isball[zpc, ypb, xpa]:
                             vj = whichball[zpc * ny * nx + ypb * nx + xpa]
                             competeForParent(
-                                np.int32(i),
+                                np.int64(i),
                                 vj,
                                 ball_findices,
                                 ball_R,

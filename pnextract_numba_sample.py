@@ -1,4 +1,4 @@
-from pnextract import extract
+from _nbpne import extract
 from pathlib import Path
 import numpy as np
 import time
@@ -24,6 +24,8 @@ print("*" * 20)
 # plt.imshow(VElems[1])
 # plt.show()
 VElems = VElems[1:-1, 1:-1, 1:-1]
+print(VElems.shape)
+print(np.unique(VElems))
 np.savez_compressed(
     Path_img.with_name(Path_img.stem + "_python_pne.npz"), VElems.astype(np.int32)
 )
