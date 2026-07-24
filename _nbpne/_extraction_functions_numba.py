@@ -552,8 +552,8 @@ def competeForParent(
                                 ball_boss[vi] = vj
                                 vj = vi
                                 vi = pvi
-                                leveli += 1
-                                levelj -= 1
+                                levelj += 1
+                                leveli -= 1
                             while levelj >= leveli and (
                                 ball_R[ball_boss[vj]] - ball_R[vj] + 0.55 * noise
                             ) / (

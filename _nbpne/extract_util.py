@@ -107,7 +107,7 @@ def extract(img_bool):
     # dt = edt(img_bool, black_border=True)
     # plt.imshow(dt[3])
     # plt.show()
-    avgR = np.mean(dt[img_bool])
+    avgR = np.mean(dt, where=img_bool)
     print("avgR:", avgR)
     defaults = Defaults(avgR)
 
