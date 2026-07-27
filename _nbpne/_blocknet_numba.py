@@ -11,21 +11,18 @@ from ._extraction_functions_numba import get_masterball
     inline="always",
     forceinline=True,
 )
-def get_max_count_nei(neis):
-    n = neis.size
-    max_val = -1
+def get_max_count_nei(neis, n_neIs):
     max_count = 0
+    max_val = -1
 
-    # 对每个唯一值统计频次（暴力但高效，因为 n <= 6）
-    for i in range(n):
-        val = neis[i]
-        if val == -1:
-            continue
+    for i in range(n_neIs):
         count = 0
-        for j in range(n):
+        val = neis[i]
+
+        for j in range(i, n_neIs):
             count += neis[j] == val
-        # 更新规则：频次更高，或频次相同但值更大
-        if count > max_count or (count == max_count and val > max_val):
+
+        if count > max_count or (count == max_count and val < max_val):
             max_count = count
             max_val = val
 
@@ -115,7 +112,6 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
     forceinline=True,
 )
 def assign_array(src, dst):
-    """展开: 显式三重 prange 逐元素赋值"""
     src_flat = src.reshape(-1)
     dst_flat = dst.reshape(-1)
     for i in nb.prange(dst.size):
@@ -128,26 +124,27 @@ def grow_pores(zsysxs_v, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        if voxls[i, j, k] == raw_value:
-            if bgn <= voxls[i, j, k + 1]:
-                VElems[i, j, k] = voxls[i, j, k + 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j, k - 1]:
-                VElems[i, j, k] = voxls[i, j, k - 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j + 1, k]:
-                VElems[i, j, k] = voxls[i, j + 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i, j - 1, k]:
-                VElems[i, j, k] = voxls[i, j - 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i + 1, j, k]:
-                VElems[i, j, k] = voxls[i + 1, j, k]
-                n_changes += 1
-            elif bgn <= voxls[i - 1, j, k]:
-                VElems[i, j, k] = voxls[i - 1, j, k]
-                n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        if bgn <= voxls[z, y, x - 1]:
+            VElems[z, y, x] = voxls[z, y, x - 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y, x + 1]:
+            VElems[z, y, x] = voxls[z, y, x + 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y - 1, x]:
+            VElems[z, y, x] = voxls[z, y - 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z, y + 1, x]:
+            VElems[z, y, x] = voxls[z, y + 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z - 1, y, x]:
+            VElems[z, y, x] = voxls[z - 1, y, x]
+            n_changes += 1
+        elif bgn <= voxls[z + 1, y, x]:
+            VElems[z, y, x] = voxls[z + 1, y, x]
+            n_changes += 1
 
     print(f"ngrowPors changes: {n_changes}")
     return VElems
@@ -157,81 +154,83 @@ def grow_pores(zsysxs_v, VElems, voxls, bgn, raw_value):
 def grow_pores_X2(zsysxs_v, VElems, voxls, bgn, raw_value):
     nVxls = zsysxs_v.shape[0]
     assign_array(VElems, voxls)
-    # 第一次遍历：正向扫描
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        if voxls[i, j, k] == raw_value:
-            if bgn <= voxls[i, j, k + 1]:
-                VElems[i, j, k] = voxls[i, j, k + 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j, k - 1]:
-                VElems[i, j, k] = voxls[i, j, k - 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j + 1, k]:
-                VElems[i, j, k] = voxls[i, j + 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i, j - 1, k]:
-                VElems[i, j, k] = voxls[i, j - 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i + 1, j, k]:
-                VElems[i, j, k] = voxls[i + 1, j, k]
-                n_changes += 1
-            elif bgn <= voxls[i - 1, j, k]:
-                VElems[i, j, k] = voxls[i - 1, j, k]
-                n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        if bgn <= voxls[z, y, x - 1]:
+            VElems[z, y, x] = voxls[z, y, x - 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y, x + 1]:
+            VElems[z, y, x] = voxls[z, y, x + 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y - 1, x]:
+            VElems[z, y, x] = voxls[z, y - 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z, y + 1, x]:
+            VElems[z, y, x] = voxls[z, y + 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z - 1, y, x]:
+            VElems[z, y, x] = voxls[z - 1, y, x]
+            n_changes += 1
+        elif bgn <= voxls[z + 1, y, x]:
+            VElems[z, y, x] = voxls[z + 1, y, x]
+            n_changes += 1
 
     print(f"  ngrowX3:{n_changes},")
 
     n_changes = 0
     assign_array(VElems, voxls)
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        if voxls[i, j, k] == raw_value:
-            if bgn <= voxls[i, j, k + 1]:
-                VElems[i, j, k] = voxls[i, j, k + 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j, k - 1]:
-                VElems[i, j, k] = voxls[i, j, k - 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j + 1, k]:
-                VElems[i, j, k] = voxls[i, j + 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i, j - 1, k]:
-                VElems[i, j, k] = voxls[i, j - 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i + 1, j, k]:
-                VElems[i, j, k] = voxls[i + 1, j, k]
-                n_changes += 1
-            elif bgn <= voxls[i - 1, j, k]:
-                VElems[i, j, k] = voxls[i - 1, j, k]
-                n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        if bgn <= voxls[z, y, x - 1]:
+            VElems[z, y, x] = voxls[z, y, x - 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y, x + 1]:
+            VElems[z, y, x] = voxls[z, y, x + 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y - 1, x]:
+            VElems[z, y, x] = voxls[z, y - 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z, y + 1, x]:
+            VElems[z, y, x] = voxls[z, y + 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z - 1, y, x]:
+            VElems[z, y, x] = voxls[z - 1, y, x]
+            n_changes += 1
+        elif bgn <= voxls[z + 1, y, x]:
+            VElems[z, y, x] = voxls[z + 1, y, x]
+            n_changes += 1
 
     print(f"{n_changes},")
 
     n_changes = 0
     assign_array(VElems, voxls)
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        if voxls[i, j, k] == raw_value:
-            if bgn <= voxls[i, j, k + 1]:
-                VElems[i, j, k] = voxls[i, j, k + 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j, k - 1]:
-                VElems[i, j, k] = voxls[i, j, k - 1]
-                n_changes += 1
-            elif bgn <= voxls[i, j + 1, k]:
-                VElems[i, j, k] = voxls[i, j + 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i, j - 1, k]:
-                VElems[i, j, k] = voxls[i, j - 1, k]
-                n_changes += 1
-            elif bgn <= voxls[i + 1, j, k]:
-                VElems[i, j, k] = voxls[i + 1, j, k]
-                n_changes += 1
-            elif bgn <= voxls[i - 1, j, k]:
-                VElems[i, j, k] = voxls[i - 1, j, k]
-                n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        if bgn <= voxls[z, y, x - 1]:
+            VElems[z, y, x] = voxls[z, y, x - 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y, x + 1]:
+            VElems[z, y, x] = voxls[z, y, x + 1]
+            n_changes += 1
+        elif bgn <= voxls[z, y - 1, x]:
+            VElems[z, y, x] = voxls[z, y - 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z, y + 1, x]:
+            VElems[z, y, x] = voxls[z, y + 1, x]
+            n_changes += 1
+        elif bgn <= voxls[z - 1, y, x]:
+            VElems[z, y, x] = voxls[z - 1, y, x]
+            n_changes += 1
+        elif bgn <= voxls[z + 1, y, x]:
+            VElems[z, y, x] = voxls[z + 1, y, x]
+            n_changes += 1
 
     print(f"  ngrowX2:{n_changes}  ")
 
@@ -244,54 +243,61 @@ def grow_pores_med_strict(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if pID == raw_value:
-            R = dt_p1[i, j, k]
-            neIs = np.array((-1, -1, -1, -1, -1, -1), dtype=np.int32)
-            nDifferentID = 0
-            V_current = voxls[i, j, k + 1]
-            R_current = dt_p1[i, j, k + 1]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[0] = V_current
-            V_current = voxls[i, j, k - 1]
-            R_current = dt_p1[i, j, k - 1]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[1] = V_current
-            V_current = voxls[i, j + 1, k]
-            R_current = dt_p1[i, j + 1, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[2] = V_current
-            V_current = voxls[i, j - 1, k]
-            R_current = dt_p1[i, j - 1, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[3] = V_current
-            V_current = voxls[i + 1, j, k]
-            R_current = dt_p1[i + 1, j, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[4] = V_current
-            V_current = voxls[i - 1, j, k]
-            R_current = dt_p1[i - 1, j, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                if R_current > R:
-                    neIs[5] = V_current
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        R = dt_p1[z, y, x]
+        nDifferentID = 0
+        neIs = np.empty(6, dtype=np.int32)
+        n_neIs = 0
+        V_current = voxls[z, y, x - 1]
+        R_current = dt_p1[z, y, x - 1]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
+        V_current = voxls[z, y, x + 1]
+        R_current = dt_p1[z, y, x + 1]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
+        V_current = voxls[z, y - 1, x]
+        R_current = dt_p1[z, y - 1, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
+        V_current = voxls[z, y + 1, x]
+        R_current = dt_p1[z, y + 1, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
+        V_current = voxls[z - 1, y, x]
+        R_current = dt_p1[z - 1, y, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
+        V_current = voxls[z + 1, y, x]
+        R_current = dt_p1[z + 1, y, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            if R_current > R:
+                neIs[n_neIs] = V_current
+                n_neIs += 1
 
-            if nDifferentID >= 3:
-                max_count_nei, max_count = get_max_count_nei(neIs)
-                if max_count >= 3:
-                    VElems[i, j, k] = max_count_nei
-                    n_changes += 1
+        if nDifferentID >= 3:
+            max_count_nei, max_count = get_max_count_nei(neIs, n_neIs)
+            if max_count >= 3:
+                VElems[z, y, x] = max_count_nei
+                n_changes += 1
 
     print(f"ngMedStrict changes: {n_changes}")
     return VElems
@@ -303,48 +309,54 @@ def grow_pores_median(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if pID == raw_value:
-            R = dt_p1[i, j, k]
-            neIs = np.array((-1, -1, -1, -1, -1, -1), dtype=np.int32)
-            nDifferentID = 0
-            V_current = voxls[i, j, k + 1]
-            R_current = dt_p1[i, j, k + 1]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[0] = V_current
-            V_current = voxls[i, j, k - 1]
-            R_current = dt_p1[i, j, k - 1]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[1] = V_current
-            V_current = voxls[i, j + 1, k]
-            R_current = dt_p1[i, j + 1, k]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[2] = V_current
-            V_current = voxls[i, j - 1, k]
-            R_current = dt_p1[i, j - 1, k]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[3] = V_current
-            V_current = voxls[i + 1, j, k]
-            R_current = dt_p1[i + 1, j, k]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[4] = V_current
-            V_current = voxls[i - 1, j, k]
-            R_current = dt_p1[i - 1, j, k]
-            if bgn <= V_current and R_current > R:
-                nDifferentID += 1
-                neIs[5] = V_current
-
-            if nDifferentID >= 2:
-                max_count_nei, max_count = get_max_count_nei(neIs)
-                if max_count >= 2:
-                    VElems[i, j, k] = max_count_nei
-                    n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        R = dt_p1[z, y, x]
+        nDifferentID = 0
+        neIs = np.empty(6, dtype=np.int32)
+        n_neIs = 0
+        V_current = voxls[z, y, x - 1]
+        R_current = dt_p1[z, y, x - 1]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y, x + 1]
+        R_current = dt_p1[z, y, x + 1]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y - 1, x]
+        R_current = dt_p1[z, y - 1, x]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y + 1, x]
+        R_current = dt_p1[z, y + 1, x]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z - 1, y, x]
+        R_current = dt_p1[z - 1, y, x]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z + 1, y, x]
+        R_current = dt_p1[z + 1, y, x]
+        if bgn <= V_current and R_current > R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        if nDifferentID >= 2:
+            max_count_nei, max_count = get_max_count_nei(neIs, n_neIs)
+            if max_count >= 2:
+                VElems[z, y, x] = max_count_nei
+                n_changes += 1
 
     print(f"ngMedian changes: {n_changes}")
     return VElems
@@ -356,48 +368,55 @@ def grow_pores_med_eqs(zsysxs_v, dt_p1, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if pID == raw_value:
-            R = dt_p1[i, j, k]
-            neIs = np.array((-1, -1, -1, -1, -1, -1), dtype=np.int32)
-            nDifferentID = 0
-            V_current = voxls[i, j, k + 1]
-            R_current = dt_p1[i, j, k + 1]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[0] = V_current
-            V_current = voxls[i, j, k - 1]
-            R_current = dt_p1[i, j, k - 1]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[1] = V_current
-            V_current = voxls[i, j + 1, k]
-            R_current = dt_p1[i, j + 1, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[2] = V_current
-            V_current = voxls[i, j - 1, k]
-            R_current = dt_p1[i, j - 1, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[3] = V_current
-            V_current = voxls[i + 1, j, k]
-            R_current = dt_p1[i + 1, j, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[4] = V_current
-            V_current = voxls[i - 1, j, k]
-            R_current = dt_p1[i - 1, j, k]
-            if bgn <= V_current and R_current >= R:
-                nDifferentID += 1
-                neIs[5] = V_current
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        R = dt_p1[z, y, x]
+        nDifferentID = 0
+        neIs = np.empty(6, dtype=np.int32)
+        n_neIs = 0
+        V_current = voxls[z, y, x - 1]
+        R_current = dt_p1[z, y, x - 1]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y, x + 1]
+        R_current = dt_p1[z, y, x + 1]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y - 1, x]
+        R_current = dt_p1[z, y - 1, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y + 1, x]
+        R_current = dt_p1[z, y + 1, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z - 1, y, x]
+        R_current = dt_p1[z - 1, y, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z + 1, y, x]
+        R_current = dt_p1[z + 1, y, x]
+        if bgn <= V_current and R_current >= R:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
 
-            if nDifferentID >= 2:
-                max_count_nei, max_count = get_max_count_nei(neIs)
-                if max_count >= 2:
-                    VElems[i, j, k] = max_count_nei
-                    n_changes += 1
+        if nDifferentID >= 2:
+            max_count_nei, max_count = get_max_count_nei(neIs, n_neIs)
+            if max_count >= 2:
+                VElems[z, y, x] = max_count_nei
+                n_changes += 1
 
     print(f"ngMedEqs changes: {n_changes}")
     return VElems
@@ -409,41 +428,48 @@ def grow_pores_med_eqs_loose(zsysxs_v, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if pID == raw_value:
-            nDifferentID = 0
-            neIs = np.array((-1, -1, -1, -1, -1, -1), dtype=np.int32)
-            V_current = voxls[i, j, k + 1]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[0] = V_current
-            V_current = voxls[i, j, k - 1]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[1] = V_current
-            V_current = voxls[i, j - 1, k]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[2] = V_current
-            V_current = voxls[i, j + 1, k]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[3] = V_current
-            V_current = voxls[i + 1, j, k]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[4] = V_current
-            V_current = voxls[i - 1, j, k]
-            if bgn <= V_current:
-                nDifferentID += 1
-                neIs[5] = V_current
+        z, y, x = zsysxs_v[ipar]
+        if VElems[z, y, x] != raw_value:
+            continue
+        nDifferentID = 0
+        neIs = np.empty(6, dtype=np.int32)
+        n_neIs = 0
+        V_current = voxls[z, y, x - 1]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y, x + 1]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y - 1, x]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y + 1, x]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z - 1, y, x]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z + 1, y, x]
+        if bgn <= V_current:
+            nDifferentID += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
 
-            if nDifferentID >= 2:
-                max_count_nei, max_count = get_max_count_nei(neIs)
-                if max_count >= 2:
-                    VElems[i, j, k] = max_count_nei
-                    n_changes += 1
+        if nDifferentID >= 2:
+            max_count_nei, max_count = get_max_count_nei(neIs, n_neIs)
+            if max_count >= 2:
+                VElems[z, y, x] = max_count_nei
+                n_changes += 1
 
     print(f"ngMedLoose changes: {n_changes}")
     return VElems
@@ -456,53 +482,61 @@ def median_elem(zsysxs_v, VElems, voxls, bgn):
     n_changes = 0
 
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if bgn <= pID:
-            n_same = 0
-            n_diff = 0
-            neIs = np.array((-1, -1, -1, -1, -1, -1), dtype=np.int32)
-            V_current = voxls[i, j, k + 1]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[0] = V_current
-            V_current = voxls[i, j, k - 1]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[1] = V_current
-            V_current = voxls[i, j + 1, k]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[2] = V_current
-            V_current = voxls[i, j - 1, k]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[3] = V_current
-            V_current = voxls[i + 1, j, k]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[4] = V_current
-            V_current = voxls[i - 1, j, k]
-            if V_current == pID:
-                n_same += 1
-            elif bgn <= V_current:
-                n_diff += 1
-                neIs[5] = V_current
-            if n_diff > n_same:
-                max_count_nei, max_count = get_max_count_nei(neIs)
-                if max_count > n_same:
-                    VElems[i, j, k] = max_count_nei
-                    n_changes += 1
+        z, y, x = zsysxs_v[ipar]
+        pID = voxls[z, y, x]
+        if pID < bgn:
+            continue
+        n_same = 0
+        n_diff = 0
+        neIs = np.empty(6, dtype=np.int32)
+        n_neIs = 0
+        V_current = VElems[z, y, x - 1]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y, x + 1]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y - 1, x]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z, y + 1, x]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z - 1, y, x]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        V_current = voxls[z + 1, y, x]
+        if V_current == pID:
+            n_same += 1
+        elif bgn <= V_current:
+            n_diff += 1
+            neIs[n_neIs] = V_current
+            n_neIs += 1
+        if n_diff > n_same:
+            max_count_nei, max_count = get_max_count_nei(neIs, n_neIs)
+            if max_count > n_same:
+                VElems[z, y, x] = max_count_nei
+                n_changes += 1
 
     print(f"nMedian: {n_changes}")
     return VElems
@@ -514,45 +548,46 @@ def retreat_pores_median(zsysxs_v, VElems, voxls, bgn, raw_value):
     assign_array(VElems, voxls)
     n_changes = 0
     for ipar in nb.prange(nVxls):
-        i, j, k = zsysxs_v[ipar]
-        pID = voxls[i, j, k]
-        if bgn <= pID:
-            nSameID = 0
-            nDiffereID = 0
-            V_current = voxls[i, j, k + 1]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
-            V_current = voxls[i, j, k - 1]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
-            V_current = voxls[i, j + 1, k]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
-            V_current = voxls[i, j - 1, k]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
-            V_current = voxls[i + 1, j, k]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
-            V_current = voxls[i - 1, j, k]
-            if V_current == pID:
-                nSameID += 1
-            elif bgn <= V_current:
-                nDiffereID += 1
+        z, y, x = zsysxs_v[ipar]
+        pID = VElems[z, y, x]
+        if pID < bgn:
+            continue
+        nSameID = 0
+        nDiffereID = 0
+        V_current = voxls[z, y, x - 1]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
+        V_current = voxls[z, y, x + 1]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
+        V_current = voxls[z, y - 1, x]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
+        V_current = voxls[z, y + 1, x]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
+        V_current = voxls[z - 1, y, x]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
+        V_current = voxls[z + 1, y, x]
+        if V_current == pID:
+            nSameID += 1
+        elif bgn <= V_current:
+            nDiffereID += 1
 
-            if nDiffereID > 0 and nSameID > 0:
-                VElems[i, j, k] = raw_value
-                n_changes += 1
+        if nDiffereID > 0 and nSameID > 0:
+            VElems[z, y, x] = raw_value
+            n_changes += 1
 
     print(f"nRetreat: {n_changes}")
     return VElems

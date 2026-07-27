@@ -77,16 +77,17 @@ class Defaults:
 
 
 class Balls_cls:
-    def __init__(self, isball, dt):
-        self.update(isball, dt)
+    def __init__(self, isball, dt, sort=True):
+        self.update(isball, dt, sort=sort)
 
-    def update(self, isball=None, dt=None):
+    def update(self, isball=None, dt=None, sort=True):
         if isball is not None:
             self.indices = nb_where(isball, nb_parallel_sum(isball))
             self.findices = self.indices - _mp5
         if dt is not None:
             self.R = dt[self.indices[:, 0], self.indices[:, 1], self.indices[:, 2]]
-        self.sort()
+        if sort:
+            self.sort()
 
     def sort(self):
         sorted_indices = np.argsort(-self.R, kind="stable")
@@ -107,20 +108,17 @@ def extract(img_bool):
     # dt = edt(img_bool, black_border=True)
     # plt.imshow(dt[3])
     # plt.show()
+    # dt = gaussian_filter(dt, 0.3)
     avgR = np.mean(dt, where=img_bool)
     print("avgR:", avgR)
     defaults = Defaults(avgR)
-
-    # dt = gaussian_filter(dt, 0.3)
     for _ in range(defaults.nRSmoothing):
         smooth_radius(img_bool, dt, zsysxs_v)
 
     isball = np.zeros_like(img_bool, dtype=bool)
     paradox_pre_rmincludedballI(img_bool, dt, isball, defaults.minRp)
-    Balls = Balls_cls(isball, dt)
-    print("num_balls_init:", Balls.indices.shape[0])
-
-    # Balls = Balls_cls(ball_indices, ball_R)
+    print(f"remained balls: {nb_parallel_sum(isball)}")
+    Balls = Balls_cls(isball, dt, sort=True)
     paradox_removeincludedballI(
         Balls.indices,
         Balls.R,
@@ -132,14 +130,13 @@ def extract(img_bool):
         defaults.MSNoise,
     )
 
-    Balls.update(isball, dt)
+    Balls.update(isball, dt, sort=True)
     print("num_balls:", Balls.indices.shape[0])
 
     moveUphill(Balls.indices, Balls.findices, Balls.R, img_bool, dt)
-    moveUphillp1(Balls.indices, Balls.R, img_bool, dt, isball)
-    Balls.update(isball, dt)
+    moveUphillp1(Balls.indices, Balls.findices, Balls.R, img_bool, dt, isball)
     moveUphill(Balls.indices, Balls.findices, Balls.R, img_bool, dt)
-    Balls.sort()
+
     Balls.boss = np.arange(Balls.indices.shape[0], dtype=np.int64)
     findBoss(
         Balls.indices,
@@ -159,7 +156,7 @@ def extract(img_bool):
         img_bool, dt, isball, Balls.indices, Balls.findices, Balls.R, Balls.boss
     )
     del img_bool
-    dt_p1 = np.pad(dt, 1, mode="constant", constant_values=0)
+    dt_p1 = np.pad(dt, 1, mode="constant", constant_values=-1)
     del dt, isball
     gc.collect()
     voxls = np.empty_like(VElems)

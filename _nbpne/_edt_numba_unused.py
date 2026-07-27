@@ -1,7 +1,9 @@
 import numba as nb
 import numpy as np
+import edt
 
-INF_FLOAT64 = np.finfo(np.float64).max
+INF = np.inf
+# INF_32 = np.finfo(np.float32).max
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -18,8 +20,8 @@ def nb_squared_edt_1d(f, w, apply_envelope):
     ranges = np.empty(n + 1, dtype=np.float64)
     k = 0
     v[0] = 0
-    ranges[0] = -INF_FLOAT64
-    ranges[1] = INF_FLOAT64
+    ranges[0] = -INF
+    ranges[1] = INF
 
     # First pass: construct lower envelope
     for i in range(1, n):
@@ -37,7 +39,7 @@ def nb_squared_edt_1d(f, w, apply_envelope):
         k += 1
         v[k] = i
         ranges[k] = s
-        ranges[k + 1] = INF_FLOAT64
+        ranges[k + 1] = INF
 
     k = 0
     # Optional: clamp to distance to image border (prevents bleed beyond edges)
@@ -84,7 +86,7 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
         Euclidean distance transform.
     """
     assert binary_img.dtype == np.dtype("bool"), "Input must be boolean array"
-    dist_sq = binary_img * INF_FLOAT64
+    dist_sq = binary_img * np.float64(INF)
     if binary_img.ndim == 2:
         sx, sy = binary_img.shape
         # X-pass (along axis 0: columns)
@@ -94,8 +96,8 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
         for x in nb.prange(sx):
             nb_squared_edt_1d(dist_sq[x, :], wy, black_border)
         dist_sq = np.sqrt(dist_sq)
-        if dist_sq[0, 0] == INF_FLOAT64:
-            dist_sq = np.full_like(dist_sq, np.inf)
+        if dist_sq[0, 0] == INF:
+            dist_sq = np.full_like(dist_sq, np.float32(INF))
         return dist_sq
 
     elif binary_img.ndim == 3:
@@ -113,8 +115,8 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
             for y in nb.prange(sy):
                 nb_squared_edt_1d(dist_sq[:, x, y], wz, black_border)
         dist_sq = np.sqrt(dist_sq)
-        if dist_sq[0, 0, 0] == INF_FLOAT64:
-            dist_sq = np.full_like(dist_sq, np.inf)
+        if dist_sq[0, 0, 0] == INF:
+            dist_sq = np.full_like(dist_sq, np.float32(INF))
         return dist_sq
 
     else:
@@ -143,8 +145,10 @@ def nb_classic_edt(binary_img, _clipROutyz=0.5, _clipROutx=0.5):
                     iSqr = min((x + 2), (nx - x + 1))
                     if iSqr < limit:
                         limit = max(
-                            (1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.01
+                            (1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1
                         )  # limit = max((1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1)
                     # 第五步：更新 dt
                     dt[z, y, x] = limit
     return dt
+
+

@@ -51,43 +51,61 @@ def nb_where(arr, nVxls):
 
 
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
-def smooth_radius(img_bool, dt, zsysxs_v):
+def smooth_radius(image, dt, zsysxs_v):
     nz, ny, nx = dt.shape
     print("smoothing R")
-    delR = np.zeros_like(dt)
+    delR = np.empty(image.shape, dtype=np.float32)
     for ipar in nb.prange(zsysxs_v.shape[0]):
-        k, j, i = zsysxs_v[ipar]
+        zo, yo, xo = zsysxs_v[ipar]
         sum_r = 0.0
         counter = 0
+        for zi in range(-1, 2):
+            for yi in range(-1, 2):
+                for xi in range(-1, 2):
+                    z = zo + zi
+                    y = yo + yi
+                    x = xo + xi
+                    if (
+                        z < 0
+                        or z >= nz
+                        or y < 0
+                        or y >= ny
+                        or x < 0
+                        or x >= nx
+                        or ~image[z, y, x]
+                    ):
+                        continue
+                    sum_r += dt[z, y, x]
+                    counter += 1
+        delR[zo, yo, xo] = 4.0 * sum_r / (3 * counter + 27) - dt[zo, yo, xo]
 
-        # 3x3x3邻域遍历
-        for kk in range(max(k - 1, 0), min(k + 2, nz)):
-            for jj in range(max(j - 1, 0), min(j + 2, ny)):
-                # 简化segment处理，直接取i-1到i+1范围
-                for ii in range(max(i - 1, 0), min(i + 2, nx)):
-                    if img_bool[kk, jj, ii]:
-                        sum_r += dt[kk, jj, ii]
-                        counter += 1
-
-        delR[k, j, i] = 4.0 * sum_r / (3 * counter + 27) - dt[k, j, i]
-
-    #
-    # 第二部分：应用平滑
     for ipar in nb.prange(zsysxs_v.shape[0]):
-        k, j, i = zsysxs_v[ipar]
+        zo, yo, xo = zsysxs_v[ipar]
         sum_del_r = 0.0
         counter = 0
-        # 再次遍历邻域
-        for kk in range(max(k - 1, 0), min(k + 2, nz)):
-            for jj in range(max(j - 1, 0), min(j + 2, ny)):
-                for ii in range(max(i - 1, 0), min(i + 2, nx)):
-                    if img_bool[kk, jj, ii]:
-                        sum_del_r += delR[kk, jj, ii]
-                        counter += 1
+        for zi in range(-1, 2):
+            for yi in range(-1, 2):
+                for xi in range(-1, 2):
+                    z = zo + zi
+                    y = yo + yi
+                    x = xo + xi
+                    if (
+                        z < 0
+                        or z >= nz
+                        or y < 0
+                        or y >= ny
+                        or x < 0
+                        or x >= nx
+                        or ~image[z, y, x]
+                    ):
+                        continue
+                    sum_del_r += delR[z, y, x]
+                    counter += 1
 
-        dt[k, j, i] += min(
+        dt[zo, yo, xo] += min(
             max(
-                0.02 * (delR[k, j, i] - 0.99 * 2.0 * sum_del_r / (counter + 27)), -0.005
+                0.02 * (delR[zo, yo, xo] - 0.99 * 2.0 * sum_del_r / (counter + 27)),
+                -0.005,
             ),
             0.01,
         )
@@ -145,31 +163,43 @@ def inParents(ball_boss, ball_index_i, ball_index_j):
 @nb.njit(parallel=True, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def paradox_pre_rmincludedballI(image, dt, isball, _minRp):
     nz, ny, nx = image.shape
-    zs = np.arange(0, nz - 1, 2)
-    ys = np.arange(0, ny - 1, 2)
-    xs = np.arange(0, nx - 1, 2)
-    for z_id in nb.prange(zs.size):
-        z = zs[z_id]
-        for y_id in nb.prange(ys.size):
-            y = ys[y_id]
-            for x_id in nb.prange(xs.size):
-                x = xs[x_id]
-                if image[z, y, x]:
-                    max_val = -np.inf
-                    max_z = 0
-                    max_y = 0
-                    max_x = 0
-                    for i in range(2):
-                        for j in range(2):
-                            for k in range(2):
-                                value = dt[z + i, y + j, x + k]
-                                if value > max_val:
-                                    max_val = value
-                                    max_z = z + i
-                                    max_y = y + j
-                                    max_x = x + k
-                    if max_val > _minRp:
-                        isball[max_z, max_y, max_x] = True
+    nz_half = (nz + 1) // 2
+    ny_half = (ny + 1) // 2
+    nx_half = (nx + 1) // 2
+    for _z in nb.prange(0, nz_half):
+        zo = _z * 2
+        for _y in nb.prange(0, ny_half):
+            yo = _y * 2
+            for _x in nb.prange(0, nx_half):
+                xo = _x * 2
+                max_val = -np.inf
+                max_z = -1
+                max_y = -1
+                max_x = -1
+                for zi in range(2):
+                    for yi in range(2):
+                        for xi in range(2):
+                            z = zo + zi
+                            y = yo + yi
+                            x = xo + xi
+                            if (
+                                z < 0
+                                or z >= nz
+                                or y < 0
+                                or y >= ny
+                                or x < 0
+                                or x >= nx
+                                or ~image[z, y, x]
+                            ):
+                                continue
+                            value = dt[z, y, x]
+                            if value > max_val and value > _minRp:
+                                max_val = value
+                                max_z = z
+                                max_y = y
+                                max_x = x
+                if max_z >= 0:
+                    isball[max_z, max_y, max_x] = True
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -178,46 +208,47 @@ def paradox_removeincludedballI(
 ):
     removed_ball = 0
     for i in range(ball_indices.shape[0]):
-        c_ball_indices = ball_indices[i]
-        if ~isball[c_ball_indices[0], c_ball_indices[1], c_ball_indices[2]]:
+        zo, yo, xo = ball_indices[i]
+        if ~isball[zo, yo, xo]:
             continue
         nz, ny, nx = image.shape
-        z, y, x = ball_indices[i]
         ri = ball_R[i]
-        ripinc = ri + 0.55
         mbmbDist = _RCorsnf * ri + _RCorsn
-        ripinc_sq = ripinc * ripinc
-        ez = int(ripinc)
-        for c in range(-ez, ez + 1):
-            c_sq = c * c
-            temp = ripinc_sq - c_sq
-            if temp < 0:
+        ripinc = ri + 0.55
+        ripinc2 = ripinc**2
+        rz = np.int64(ripinc)
+        for zi in range(-rz, rz + 1):
+            ry2 = ripinc2 - zi**2
+            if ry2 < 0:
                 continue
-            ey = int(np.sqrt(temp))
-            for b in range(-ey, ey + 1):
-                b_sq = b * b
-                temp = ripinc_sq - c_sq - b_sq
-                if temp < 0:
+            ry = np.int64(np.sqrt(ry2))
+            for yi in range(-ry, ry + 1):
+                rx2 = ry2 - yi**2
+                if rx2 < 0:
                     continue
-                ex = int(np.sqrt(temp))
-                for a in range(-ex, ex + 1):
-                    a_sq = a * a
-                    vn_z = z + c
-                    vn_y = y + b
-                    vn_x = x + a
+                rx = np.int64(np.sqrt(rx2))
+                for xi in range(-rx, rx + 1):
+                    z = zo + zi
+                    y = yo + yi
+                    x = xo + xi
                     if (
-                        0 <= vn_z < nz
-                        and 0 <= vn_y < ny
-                        and 0 <= vn_x < nx
-                        and (a != 0 or b != 0 or c != 0)
+                        (zi == 0 and yi == 0 and xi == 0)
+                        or z < 0
+                        or z >= nz
+                        or y < 0
+                        or y >= ny
+                        or x < 0
+                        or x >= nx
+                        or ~isball[z, y, x]
                     ):
-                        if isball[vn_z, vn_y, vn_x]:
-                            rj = dt[vn_z, vn_y, vn_x]
-                            if rj <= ri:
-                                D = np.sqrt(a_sq + b_sq + c_sq)
-                                if D < mbmbDist or D + rj < ripinc + _MSNoise:
-                                    isball[vn_z, vn_y, vn_x] = False
-                                    removed_ball += 1
+                        continue
+
+                    rj = dt[z, y, x]
+                    if rj <= ri:
+                        D = np.sqrt(zi**2 + yi**2 + xi**2)
+                        if D < mbmbDist or D + rj < ripinc + _MSNoise:
+                            isball[z, y, x] = False
+                            removed_ball += 1
     print(f"removed ball {removed_ball}")
 
 
@@ -225,7 +256,7 @@ def paradox_removeincludedballI(
 def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
     nz, ny, nx = image.shape
     for i in nb.prange(ball_indices.shape[0]):
-        disp = np.array([0, 0, 0])
+        disp = np.array([0, 0, 0], dtype=np.float64)
         iz, iy, ix = ball_indices[i]
         vi_r = dt[iz, iy, ix]
         vjm_z = iz - 1
@@ -274,15 +305,12 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
                     disp[2] = max(-0.49, min(0.49, -0.5 * (gp + gm) / (gp - gm)))
 
         ball_findices[i] = ball_indices[i] + disp - _mp5
-        R_modified = ball_R[i] + 0.95 * np.sqrt(
-            disp[0] ** 2 + disp[1] ** 2 + disp[2] ** 2
-        )
-        ball_R[i] = R_modified
-        dt[iz, iy, ix] = R_modified
+        ball_R[i] = vi_r + 0.95 * np.sqrt(disp[0] ** 2 + disp[1] ** 2 + disp[2] ** 2)
+        # dt[iz, iy, ix] = R_modified
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
-def moveUphillp1(ball_indices, ball_R, image, dt, isball):
+def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
     nz, ny, nx = image.shape
     for i in range(ball_indices.shape[0]):
         disp_z = 0.0
@@ -360,13 +388,13 @@ def moveUphillp1(ball_indices, ball_R, image, dt, isball):
             ):
                 isball[iz, iy, ix] = False
                 isball[vxlj_z, vxlj_y, vxlj_x] = True
-                # ball_findices[i, 0] = vxlj_z - _mp5
-                # ball_findices[i, 1] = vxlj_y - _mp5
-                # ball_findices[i, 2] = vxlj_x - _mp5
-                # ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
-                # ball_indices[i, 0] = vxlj_z
-                # ball_indices[i, 1] = vxlj_y
-                # ball_indices[i, 2] = vxlj_x
+                ball_indices[i, 0] = vxlj_z
+                ball_indices[i, 1] = vxlj_y
+                ball_indices[i, 2] = vxlj_x
+                ball_findices[i, 0] = vxlj_z - _mp5
+                ball_findices[i, 1] = vxlj_y - _mp5
+                ball_findices[i, 2] = vxlj_x - _mp5
+                ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -583,6 +611,22 @@ def competeForParent(
                             # make friends
 
 
+@nb.njit(
+    parallel=True,
+    cache=True,
+    fastmath=True,
+    nogil=True,
+    error_model="numpy",
+)
+def float_range(start, stop, step):
+    x = start
+    n = 0
+    while x < stop:
+        yield x
+        n += 1
+        x = start + n * step
+
+
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def findBoss(
     ball_indices,
@@ -598,9 +642,6 @@ def findBoss(
     _lenNf,
 ):
     nz, ny, nx = image.shape
-    nz = np.int64(nz)
-    ny = np.int64(ny)
-    nx = np.int64(nx)
     nBalls = ball_indices.shape[0]
     whichball = Dict.empty(
         key_type=types.int64,  # 或 types.int32，取决于你的索引范围
@@ -614,44 +655,54 @@ def findBoss(
         whichball[keys[i]] = np.int64(i)
 
     for i in range(nBalls):
-        z, y, x = ball_findices[i]
+        zo, yo, xo = (
+            ball_findices[i, 0],
+            ball_findices[i, 1],
+            ball_findices[i, 2],
+        )
+
         ripp = ball_R[i] * 0.6 + 2.0 * _MSNoise + 2.0
-        ez = z + ripp
-        zpcs = np.arange(2.0 * z - ez, ez + 0.001, 1.0)
-        for zpc in zpcs:
-            temp = ripp * ripp - (zpc - z) * (zpc - z)
-            if temp < 0:
+        ripp2 = ripp**2
+        rz = ripp
+        zis = np.arange(-rz, rz + 1e-3, 1.0, dtype=np.float64)
+        for zi in zis:
+            ry2 = ripp2 - zi**2
+            if ry2 < 0:
                 continue
-            ey = y + np.sqrt(temp)
-            ypbs = np.arange(2.0 * y - ey, ey + 0.001, 1.0)
-            for ypb in ypbs:
-                temp = ripp * ripp - (zpc - z) * (zpc - z) - (ypb - y) * (ypb - y)
-                if temp < 0:
+            ry = np.sqrt(ry2)
+            yis = np.arange(-ry, ry + 1e-3, 1.0, dtype=np.float64)
+            for yi in yis:
+                rx2 = ry2 - yi**2
+                if rx2 < 0:
                     continue
-                ex = x + np.sqrt(temp)
-                xpas = np.arange(2.0 * x - ex, ex + 0.001, 1.0)
-                for xpa in xpas:
-                    zpc = np.int64(zpc)
-                    ypb = np.int64(ypb)
-                    xpa = np.int64(xpa)
+                rx = np.sqrt(rx2)
+                xis = np.arange(-rx, rx + 1e-3, 1.0, dtype=np.float64)
+                for xi in xis:
+                    z = np.int64(zo + zi)
+                    y = np.int64(yo + yi)
+                    x = np.int64(xo + xi)
                     if (
-                        0 <= zpc < nz
-                        and 0 <= ypb < ny
-                        and 0 <= xpa < nx
-                        and (zpc != 0 or ypb != 0 or xpa != 0)
+                        (zi == 0 and yi == 0 and xi == 0)
+                        or z < 0
+                        or z >= nz
+                        or y < 0
+                        or y >= ny
+                        or x < 0
+                        or x >= nx
+                        or ~isball[z, y, x]
                     ):
-                        if isball[zpc, ypb, xpa]:
-                            vj = whichball[zpc * ny * nx + ypb * nx + xpa]
-                            competeForParent(
-                                np.int64(i),
-                                vj,
-                                ball_findices,
-                                ball_R,
-                                ball_master,
-                                image,
-                                dt,
-                                _MSNoise,
-                                _midRf,
-                                _vmvRadRelNf,
-                                _lenNf,
-                            )
+                        continue
+                    vj = whichball[z * ny * nx + y * nx + x]
+                    competeForParent(
+                        np.int64(i),
+                        vj,
+                        ball_findices,
+                        ball_R,
+                        ball_master,
+                        image,
+                        dt,
+                        _MSNoise,
+                        _midRf,
+                        _vmvRadRelNf,
+                        _lenNf,
+                    )
