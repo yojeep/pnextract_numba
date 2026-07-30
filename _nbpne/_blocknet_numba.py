@@ -38,68 +38,72 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
     poreIs = np.where(ball_boss == np.arange(ball_boss.shape[0]))[0]
     for ind in nb.prange(poreIs.size):
         pore_ind = poreIs[ind]
-        z, y, x = ball_indices[pore_ind] + 1
-        VElems[z, y, x] = ind
+        zm, ym, xm = ball_indices[pore_ind] + 1
+        VElems[zm, ym, xm] = ind
 
     for ball_index in range(ball_findices.shape[0]):
         # if ball_boss[ball_index] == ball_index:
         #     continue
         masterball = get_masterball(ball_boss, ball_index)
-        cpmi, bpmi, apmi = ball_indices[masterball]
-        VElemV = VElems[cpmi + 1, bpmi + 1, apmi + 1]
+        zm, ym, xm = ball_indices[masterball] + 1
+        Vm = VElems[zm, ym, xm]
         # assert 0 <= VElemV < len(poreIs), f"Invalid VElemV: {VElemV}"
-        z, y, x = ball_findices[ball_index]
-        R = ball_R[ball_index]
-        r2 = int((max(R * 0.25 - 1.0, 1.001)) ** 2)
-        ez = np.sqrt(r2)
-        z_start = max(z - ez, 0.5)
-        z_end = min(z + ez, nz - 0.5) + 0.001
-        zpcss = np.arange(z_start, z_end, 1.0)
-        for zpc in zpcss:
-            temp = r2 - (zpc - z) * (zpc - z)
-            if temp < 0:
+        zo, yo, xo = ball_findices[ball_index]
+        r = ball_R[ball_index]
+        # r2 = r**2
+        rz2 = np.int32((max(r * 0.25 - 1.0, 1.001)) ** 2)
+        rz = np.sqrt(rz2)
+
+        zfs = np.arange(
+            max(zo - rz, 0.5), min(zo + rz, nz - 0.5) + 1e-6, 1.0, dtype=np.float32
+        )
+        for zf in zfs:
+            ry2 = rz2 - (zf - zo) ** 2
+            if ry2 <= 0:
                 continue
-            ey = np.sqrt(temp)
-            y_start = max(y - ey, 0.5)
-            y_end = min(y + ey, ny - 0.5) + 0.001
-            ypbs = np.arange(y_start, y_end, 1.0)
-            for ypb in ypbs:
-                temp = r2 - (zpc - z) * (zpc - z) - (ypb - y) * (ypb - y)
-                if temp < 0:
+            ry = np.sqrt(ry2)
+            yfs = np.arange(
+                max(yo - ry, 0.5), min(yo + ry, ny - 0.5) + 1e-6, 1.0, dtype=np.float32
+            )
+            for yf in yfs:
+                rx2 = ry2 - (yf - yo) ** 2
+                if rx2 <= 0:
                     continue
-                ex = np.sqrt(temp)
-                x_start = max(x - ex, 0.5)
-                x_end = min(x + ex, nx - 0.5) + 0.001
-                xpas = np.arange(x_start, x_end, 1.0)
-                for xpa in xpas:
-                    zpci = int(zpc)
-                    ypbi = int(ypb)
-                    xpai = int(xpa)
-                    zpci_VE = zpci + 1
-                    ypbi_VE = ypbi + 1
-                    xpai_VE = xpai + 1
-                    if 0 <= zpci < nz and 0 <= ypbi < ny and 0 <= xpai < nx:
-                        if img_bool[zpci, ypbi, xpai]:
-                            idj = VElems[zpci_VE, ypbi_VE, xpai_VE]
-                            if idj == raw_value:
-                                VElems[zpci_VE, ypbi_VE, xpai_VE] = VElemV
-                            elif VElemV != idj:
-                                if (
-                                    ~isball[zpci, ypbi, xpai]
-                                    and dt[zpci, ypbi, xpai] < R
-                                ):
-                                    mvj = poreIs[idj]
-                                    cmi = zpc - ball_findices[masterball, 0]
-                                    bmi = ypb - ball_findices[masterball, 1]
-                                    ami = xpa - ball_findices[masterball, 2]
-                                    cmj = zpc - ball_findices[mvj, 0]
-                                    bmj = ypb - ball_findices[mvj, 1]
-                                    amj = xpa - ball_findices[mvj, 2]
-                                    if (
-                                        cmi * cmi + bmi * bmi + ami * ami
-                                        < cmj * cmj + bmj * bmj + amj * amj
-                                    ):
-                                        VElems[zpci_VE, ypbi_VE, xpai_VE] = VElemV
+                rx = np.sqrt(rx2)
+                xfs = np.arange(
+                    max(xo - rx, 0.5), min(xo + rx, nx - 0.5) + 1e-6, 1.0, np.float32
+                )
+                for xf in xfs:
+                    z = np.int32(zf)
+                    y = np.int32(yf)
+                    x = np.int32(xf)
+                    if (
+                        z < 0
+                        or z >= nz
+                        or y < 0
+                        or y >= ny
+                        or x < 0
+                        or x >= nx
+                        or ~img_bool[z, y, x]
+                    ):
+                        continue
+                    zVE = z + 1
+                    yVE = y + 1
+                    xVE = x + 1
+                    Vi = VElems[zVE, yVE, xVE]
+                    if Vi == raw_value:
+                        VElems[zVE, yVE, xVE] = Vm
+                    elif Vi != Vm:
+                        if ~isball[z, y, x] and dt[z, y, x] < r:
+                            zif = zf - ball_findices[Vi, 0]
+                            yif = yf - ball_findices[Vi, 1]
+                            xif = xf - ball_findices[Vi, 2]
+                            zmf = zf - ball_findices[masterball, 0]
+                            ymf = yf - ball_findices[masterball, 1]
+                            xmf = xf - ball_findices[masterball, 2]
+
+                            if zmf**2 + ymf**2 + xmf**2 < zif**2 + yif**2 + xif**2:
+                                VElems[zVE, yVE, xVE] = Vm
     return VElems, poreIs
 
 

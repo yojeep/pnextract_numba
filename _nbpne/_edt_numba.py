@@ -281,32 +281,30 @@ def nb_edt(binary_img, wx=1.0, wy=1.0, wz=1.0, black_border=False):
 def nb_classic_edt(binary_img, _clipROutyz=0.5, _clipROutx=0.5):
     dt = nb_edt(binary_img)
     nz, ny, nx = dt.shape
-    nxy = ny * nx
-    total = nz * nxy
+    for z in nb.prange(nz):
+        for y in nb.prange(ny):
+            for x in nb.prange(nx):
+                if binary_img[z, y, x]:
+                    limit = dt[z, y, x] - 0.5
 
-    for i in nb.prange(total):
-        z = i // nxy
-        rem = i % nxy
-        y = rem // nx
-        x = rem % nx
+                    iSqr = min(y + 2, ny - y + 1)
+                    if iSqr < limit:
+                        limit = max(
+                            (1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01
+                        )
 
-        if binary_img[z, y, x]:
-            limit = dt[z, y, x] - 0.5
+                    iSqr = min(z + 2, nz - z + 1)
+                    if iSqr < limit:
+                        limit = max(
+                            (1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01
+                        )
 
-            iSqr = min(y + 2, ny - y + 1)
-            if iSqr < limit:
-                limit = max((1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01)
+                    iSqr = min(x + 2, nx - x + 1)
+                    if iSqr < limit:
+                        limit = max(
+                            (1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1
+                        )  # 注意这里是 0.1
 
-            iSqr = min(z + 2, nz - z + 1)
-            if iSqr < limit:
-                limit = max((1.0 - _clipROutyz) * limit + _clipROutyz * iSqr, 0.01)
-
-            iSqr = min(x + 2, nx - x + 1)
-            if iSqr < limit:
-                limit = max(
-                    (1.0 - _clipROutx) * limit + _clipROutx * iSqr, 0.1
-                )  # 注意这里是 0.1
-
-            dt[z, y, x] = limit
+                    dt[z, y, x] = limit
 
     return dt
