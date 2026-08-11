@@ -75,9 +75,9 @@ We tested three configurations on the same input image(image_500_500_500.npz):
 
 | Method                        | Threads | Num Pores | Time Cost (s) | Notes                 |
 | ----------------------------- | ------- | --------- | ------------- | --------------------- |
-| Classical PNE (Single Thread) | 1       | 1819      | 146.4 s      | Baseline              |
-| Classical PNE (64 Threads)    | 64      | 1819      | 37.8 s        | Parallelized C++      |
-| pnextract_numba (64 Threads)  | 64      | 1793      | 19.3s         | Python implementation |
+| Classical PNE (Single Thread) | 1       | 1689      | 129.3 s       | Baseline              |
+| Classical PNE (64 Threads)    | 64      | 1689      | 37.5 s       | Parallelized C++      |
+| pnextract_numba (64 Threads)  | 64      | 1693      | 14.6s         | Python implementation |
 
 ![Classical PNE vs pnextract_numba](images/pnextract_numba.png)
 

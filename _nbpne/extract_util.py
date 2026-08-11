@@ -4,7 +4,7 @@ from ._edt_numba import nb_classic_edt, nb_edt as edt
 
 
 from ._extraction_functions_numba import (
-    _mp5,
+    _0p5,
     nb_parallel_sum,
     nb_where,
     smooth_radius,
@@ -77,15 +77,22 @@ class Defaults:
 
 
 class Balls_cls:
-    def __init__(self, isball, dt, sort=True):
-        self.update(isball, dt, sort=sort)
+    def __init__(self, isball, dt, sort=True) -> None:
+        self.initialize(isball, dt, sort=sort)
 
-    def update(self, isball=None, dt=None, sort=True):
+    def initialize(self, isball, dt, sort=True) -> None:
+        self.indices = nb_where(isball, nb_parallel_sum(isball))
+        self.findices = self.indices + _0p5
+        self.R = dt[self.indices[:, 0], self.indices[:, 1], self.indices[:, 2]]
+        if sort:
+            self.sort()
+
+    def update(self, isball=None, sort=True):
         if isball is not None:
-            self.indices = nb_where(isball, nb_parallel_sum(isball))
-            self.findices = self.indices - _mp5
-        if dt is not None:
-            self.R = dt[self.indices[:, 0], self.indices[:, 1], self.indices[:, 2]]
+            keep = isball[self.indices[:, 0], self.indices[:, 1], self.indices[:, 2]]
+            self.indices = self.indices[keep]
+            self.findices = self.findices[keep]
+            self.R = self.R[keep]
         if sort:
             self.sort()
 
@@ -94,6 +101,7 @@ class Balls_cls:
         self.indices = self.indices[sorted_indices]
         self.findices = self.findices[sorted_indices]
         self.R = self.R[sorted_indices]
+        return self
 
 
 def extract(img_bool):
@@ -130,12 +138,14 @@ def extract(img_bool):
         defaults.MSNoise,
     )
 
-    Balls.update(isball, dt, sort=True)
+    Balls.update(isball, sort=False)
     print("num_balls:", Balls.indices.shape[0])
 
     moveUphill(Balls.indices, Balls.findices, Balls.R, img_bool, dt)
+    Balls.sort()
     moveUphillp1(Balls.indices, Balls.findices, Balls.R, img_bool, dt, isball)
     moveUphill(Balls.indices, Balls.findices, Balls.R, img_bool, dt)
+    Balls.update(isball, sort=True)
 
     Balls.boss = np.arange(Balls.indices.shape[0], dtype=np.int64)
     findBoss(
@@ -248,8 +258,10 @@ def extract(img_bool):
     VElems = median_elem(zsysxs_v, VElems, voxls, 0)
 
     VElems = grow_pores(zsysxs_v, VElems, voxls, 0, -1)
-    while grow_pores_X2(zsysxs_v, VElems, voxls, 0, -1)[1] != 0:
-        VElems = grow_pores_X2(zsysxs_v, VElems, voxls, 0, -1)[0]
+    while True:
+        VElems, num_changes = grow_pores_X2(zsysxs_v, VElems, voxls, 0, -1)
+        if num_changes == 0:
+            break
     VElems = grow_pores(zsysxs_v, VElems, voxls, 0, -1)
 
     VElems = retreat_pores_median(zsysxs_v, VElems, voxls, 0, -1)

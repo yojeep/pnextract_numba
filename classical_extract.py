@@ -6,9 +6,9 @@ import time
 t0 = time.time()
 Path_img = Path(r"./Data/image_500_500_500.npz")
 img = np.load(Path_img)["arr_0"]
-img = img == 1
+img = img == 0
 
-VElems_pypne, pn = pypne.pnextract(img, verbose=True, n_workers=64)
+VElems_pypne, pn = pypne.pnextract(img, verbose=True, n_workers=-1)
 
 print(f"Time cost: {time.time() - t0:.4f} s")
 VElems_pypne = VElems_pypne[1:-1, 1:-1, 1:-1].astype(np.int32)

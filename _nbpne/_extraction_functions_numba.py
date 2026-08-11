@@ -5,7 +5,7 @@ import numba as nb
 from numba.core import types
 from numba.typed import Dict
 
-_mp5 = np.float32(-0.5)
+_0p5 = np.float32(0.5)
 
 
 @nb.njit(
@@ -149,14 +149,14 @@ def get_ball_level(ball_boss, ball_index):
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
 def inParents(ball_boss, ball_index_i, ball_index_j):
-    """判断 ball_j 是否是 ball_i 的祖先（父节点或更高层级父节点）"""
-    current = ball_boss[ball_index_i]  # 当前检查的节点
+    """Check if ball_index_j is a parent of ball_index_i in the boss tree"""
+    current = ball_boss[ball_index_i]
     while True:
         if current == ball_index_j:
-            return True  # 找到目标父节点
+            return True
         if current == ball_boss[current]:
-            return False  # 到达根节点（boss指向自己）
-        current = ball_boss[current]  # 继续检查父节点
+            return False
+        current = ball_boss[current]
 
 
 # def paradox_pre_removeincludedballI(image, dt, isball, _minRp): Avoid too long name, due to numba cache limit
@@ -172,7 +172,7 @@ def paradox_pre_rmincludedballI(image, dt, isball, _minRp):
             yo = _y * 2
             for _x in nb.prange(0, nx_half):
                 xo = _x * 2
-                max_val = -np.inf
+                max_r = -1
                 max_z = -1
                 max_y = -1
                 max_x = -1
@@ -192,12 +192,13 @@ def paradox_pre_rmincludedballI(image, dt, isball, _minRp):
                                 or ~image[z, y, x]
                             ):
                                 continue
-                            value = dt[z, y, x]
-                            if value > max_val and value > _minRp:
-                                max_val = value
-                                max_z = z
-                                max_y = y
-                                max_x = x
+                            r = dt[z, y, x]
+                            if r <= max_r or r <= _minRp:
+                                continue
+                            max_r = r
+                            max_z = z
+                            max_y = y
+                            max_x = x
                 if max_z >= 0:
                     isball[max_z, max_y, max_x] = True
 
@@ -214,41 +215,49 @@ def paradox_removeincludedballI(
         nz, ny, nx = image.shape
         ri = ball_R[i]
         mbmbDist = _RCorsnf * ri + _RCorsn
-        ripinc = ri + 0.55
-        ripinc2 = ripinc**2
-        rz = np.int32(ripinc)
-        for zi in range(-rz, rz + 1):
-            ry2 = ripinc2 - zi**2
-            if ry2 <= 0:
-                continue
-            ry = np.int32(np.sqrt(ry2))
-            for yi in range(-ry, ry + 1):
-                rx2 = ry2 - yi**2
-                if rx2 <= 0:
-                    continue
-                rx = np.int32(np.sqrt(rx2))
-                for xi in range(-rx, rx + 1):
-                    z = zo + zi
-                    y = yo + yi
-                    x = xo + xi
-                    if (
-                        (zi == 0 and yi == 0 and xi == 0)
-                        or z < 0
-                        or z >= nz
-                        or y < 0
-                        or y >= ny
-                        or x < 0
-                        or x >= nx
-                        or ~isball[z, y, x]
-                    ):
-                        continue
+        r_sphere = ri + 0.55
+        r_sphere_2 = r_sphere**2
 
+        # voxel center = index + 0.5
+        # |(z+0.5) - cz| <= radius
+        # → z >= cz - radius - 0.5
+        # → z <= cz + radius - 0.5
+        z_start = max(int(np.ceil(zo - _0p5 - r_sphere)), 0)
+        z_end = min(int(np.floor(zo - _0p5 + r_sphere)) + 1, nz)
+
+        for z in range(z_start, z_end):
+            dz = z + _0p5 - zo
+            ry2 = r_sphere_2 - dz * dz
+            if ry2 <= 0.0:
+                continue
+            ry = np.sqrt(ry2)
+
+            y_start = max(int(np.ceil(yo - _0p5 - ry)), 0)
+            y_end = min(int(np.floor(yo - _0p5 + ry)) + 1, ny)
+
+            for y in range(y_start, y_end):
+                dy = y + _0p5 - yo
+                rx2 = ry2 - dy * dy
+                if rx2 <= 0.0:
+                    continue
+                rx = np.sqrt(rx2)
+
+                x_start = max(int(np.ceil(xo - _0p5 - rx)), 0)
+                x_end = min(int(np.floor(xo - _0p5 + rx)) + 1, nx)
+
+                for x in range(x_start, x_end):
+                    dx = x + _0p5 - xo
+                    if ~isball[z, y, x] or (z == zo and y == yo and x == xo):
+                        continue
                     rj = dt[z, y, x]
-                    if rj <= ri:
-                        D = np.sqrt(zi**2 + yi**2 + xi**2)
-                        if D < mbmbDist or D + rj < ripinc + _MSNoise:
-                            isball[z, y, x] = False
-                            removed_ball += 1
+                    if rj > ri:
+                        continue
+                    D = np.sqrt(dz**2 + dy**2 + dx**2)
+                    if D >= mbmbDist and D + rj >= r_sphere + _MSNoise:
+                        continue
+                    isball[z, y, x] = False
+                    removed_ball += 1
+
     print(f"removed ball {removed_ball}")
 
 
@@ -304,9 +313,8 @@ def moveUphill(ball_indices, ball_findices, ball_R, image, dt):
                 if abs(gp - gm) > 0.01:
                     disp[2] = max(-0.49, min(0.49, -0.5 * (gp + gm) / (gp - gm)))
 
-        ball_findices[i] = ball_indices[i] + disp - _mp5
+        ball_findices[i] = ball_indices[i] + disp + _0p5
         ball_R[i] = vi_r + 0.95 * np.sqrt(disp[0] ** 2 + disp[1] ** 2 + disp[2] ** 2)
-        # dt[iz, iy, ix] = R_modified
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -377,24 +385,27 @@ def moveUphillp1(ball_indices, ball_findices, ball_R, image, dt, isball):
         vxlj_y = np.int32(iy + disp_y)
         vxlj_x = np.int32(ix + disp_x)
         if (
-            0 <= vxlj_z < nz
-            and 0 <= vxlj_y < ny
-            and 0 <= vxlj_x < nx
-            and (vxlj_z != iz or vxlj_y != iy or vxlj_x != ix)
+            vxlj_z < 0
+            or vxlj_z >= nz
+            or vxlj_y < 0
+            or vxlj_y >= ny
+            or vxlj_x < 0
+            or vxlj_x >= nx
+            or (vxlj_z == iz and vxlj_y == iy and vxlj_x == ix)
+            or isball[vxlj_z, vxlj_y, vxlj_x]
+            or dt[vxlj_z, vxlj_y, vxlj_x] <= ball_R[i]
         ):
-            if (
-                ~isball[vxlj_z, vxlj_y, vxlj_x]
-                and dt[vxlj_z, vxlj_y, vxlj_x] > ball_R[i]
-            ):
-                isball[iz, iy, ix] = False
-                isball[vxlj_z, vxlj_y, vxlj_x] = True
-                ball_indices[i, 0] = vxlj_z
-                ball_indices[i, 1] = vxlj_y
-                ball_indices[i, 2] = vxlj_x
-                ball_findices[i, 0] = vxlj_z - _mp5
-                ball_findices[i, 1] = vxlj_y - _mp5
-                ball_findices[i, 2] = vxlj_x - _mp5
-                ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
+            continue
+
+        isball[iz, iy, ix] = False
+        isball[vxlj_z, vxlj_y, vxlj_x] = True
+        ball_indices[i, 0] = vxlj_z
+        ball_indices[i, 1] = vxlj_y
+        ball_indices[i, 2] = vxlj_x
+        ball_findices[i, 0] = vxlj_z + _0p5
+        ball_findices[i, 1] = vxlj_y + _0p5
+        ball_findices[i, 2] = vxlj_x + _0p5
+        ball_R[i] = dt[vxlj_z, vxlj_y, vxlj_x]
 
 
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True, error_model="numpy")
@@ -413,8 +424,8 @@ def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
     forceinline=True,
 )
 def competeForParent(
-    vi,
-    vj,
+    bi,
+    bj,
     ball_findices,
     ball_R,
     ball_boss,
@@ -425,19 +436,30 @@ def competeForParent(
     _vmvRadRelNf,
     _lenNf,
 ):
+
+    def ratio_boss(boss_R, self_R, d, n):
+        return (boss_R - self_R + 2.0 * n) / (d + 0.25)
+
+    def ratio_peer(other_R, self_R, d, n):
+        return (other_R - self_R + 2.0 * n + 0.01) / (d + 0.2)
+
+    def ratio_near(boss_R, self_R, d, n, off):
+        return (boss_R - self_R + 2.0 * n) / (d + off)
+
     nz, ny, nx = image.shape
     noise = _MSNoise
-    ri = ball_R[vi]
-    rj = ball_R[vj]
-    riSqr = ri * ri
-    rjSqr = rj * rj
-    fiz, fiy, fix = ball_findices[vi]
-    fjz, fjy, fjx = ball_findices[vj]
-    dSqr = np.sum((ball_findices[vi] - ball_findices[vj]) ** 2)
-    wsinv = 1.0 / (riSqr + rjSqr)
-    middlevxlz = np.int32((fiz * rjSqr + fjz * riSqr) * wsinv)
-    middlevxly = np.int32((fiy * rjSqr + fjy * riSqr) * wsinv)
-    middlevxlx = np.int32((fix * rjSqr + fjx * riSqr) * wsinv)
+    ri = ball_R[bi]
+    rj = ball_R[bj]
+    riSq = ri**2
+    rjSq = rj**2
+    fzi, fyi, fxi = ball_findices[bi]
+    fzj, fyj, fxj = ball_findices[bj]
+    dSq = (fzi - fzj) ** 2 + (fyi - fyj) ** 2 + (fxi - fxj) ** 2
+    dSqrt = np.sqrt(dSq)
+    wsinv = 1.0 / (riSq + rjSq)
+    middlevxlz = np.int32((fzi * rjSq + fzj * riSq) * wsinv)
+    middlevxly = np.int32((fyi * rjSq + fyj * riSq) * wsinv)
+    middlevxlx = np.int32((fxi * rjSq + fxj * riSq) * wsinv)
     if (
         middlevxlz < 0
         or middlevxlz >= nz
@@ -448,158 +470,141 @@ def competeForParent(
         or ~image[middlevxlz, middlevxly, middlevxlx]
     ):
         return
+    middlevxl_R = dt[middlevxlz, middlevxly, middlevxlx]
+    minR = min(ri, rj)
+    if middlevxl_R < minR * _midRf - 0.5 or 1.01 * dSqrt > ri + rj + 1.0 + noise:
+        return
 
-    if (
-        dt[middlevxlz, middlevxly, middlevxlx] > min(ri, rj) * _midRf - 0.5
-        and 1.01 * np.sqrt(dSqr) < ri + rj + 1.0 + 1.0 * noise
-    ):
-        if ball_boss[vj] == vj:
-            if get_masterball(ball_boss, vi) != vj:
-                if ri >= rj:
-                    ball_boss[vj] = vi
-                elif ball_R[ball_boss[vi]] <= rj:
-                    ball_boss[vi] = vj
-                elif ri >= rj - noise and ri * _vmvRadRelNf + 1.0 * noise >= rj:
-                    ball_boss[vj] = vi
-        elif ball_boss[vi] == vi:
-            if get_masterball(ball_boss, vj) != vi:
-                if rj >= ri:
-                    ball_boss[vi] = vj
-                elif ball_R[ball_boss[vj]] <= ri:
-                    ball_boss[vj] = vi
-                elif rj >= ri - noise and rj * _vmvRadRelNf + 1.0 * noise >= ri:
-                    ball_boss[vi] = vj
+    if ball_boss[bj] == bj and get_masterball(ball_boss, bi) != bj:
+        if ri >= rj:
+            ball_boss[bj] = bi
+        elif ball_R[ball_boss[bi]] <= rj:
+            ball_boss[bi] = bj
+        elif ri >= rj - noise and ri * _vmvRadRelNf + 1.0 * noise >= rj:
+            ball_boss[bj] = bi
+    elif ball_boss[bi] == bi and get_masterball(ball_boss, bj) != bi:
+        if rj >= ri:
+            ball_boss[bi] = bj
+        elif ball_R[ball_boss[bj]] <= ri:
+            ball_boss[bj] = bi
+        elif rj >= ri - noise and rj * _vmvRadRelNf + 1.0 * noise >= ri:
+            ball_boss[bi] = bj
 
-        mvi = get_masterball(ball_boss, vi)
-        mvj = get_masterball(ball_boss, vj)
+    mbi = get_masterball(ball_boss, bi)
+    mbj = get_masterball(ball_boss, bj)
 
-        if mvi != vj and mvj != vi:
-            if mvi == mvj:
-                leveli = get_ball_level(ball_boss, vi)
-                levelj = get_ball_level(ball_boss, vj)
-                bvi = ball_boss[vi]
-                bvj = ball_boss[vj]
-                bvi_R = ball_R[bvi]
-                bvj_R = ball_R[bvj]
-                dist_vivj = np.sqrt(
-                    np.sum((ball_findices[vi] - ball_findices[vj]) ** 2)
-                )
-                dist_bvi_vi = np.sqrt(
-                    np.sum((ball_findices[bvi] - ball_findices[vi]) ** 2)
-                )
-                dist_bvj_vj = np.sqrt(
-                    np.sum((ball_findices[bvj] - ball_findices[vj]) ** 2)
-                )
-                if leveli + 1 < levelj and (bvj_R - rj + 2.0 * noise) / (
-                    dist_bvj_vj + 0.25
-                ) < (ri - rj + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
-                    ball_boss[vj] = vi
-                elif leveli > levelj + 1 and (bvi_R - ri + 2.0 * noise) / (
-                    dist_bvi_vi + 0.25
-                ) < (rj - ri + 2.0 * noise + 0.01) / (dist_vivj + 0.2):
-                    ball_boss[vi] = vj
-                elif (
-                    leveli > levelj
-                    and (bvi_R - ri + 2.0 * noise) / (dist_bvi_vi + 1.2)
-                    < (rj - ri + 2.0 * noise) / (dist_vivj + 1.3)
-                    and not inParents(ball_boss, vj, vi)
+    if mbi == bj or mbj == bi:
+        return
+
+    if mbi == mbj:
+        leveli = get_ball_level(ball_boss, bi)
+        levelj = get_ball_level(ball_boss, bj)
+        level_diff = leveli - levelj
+        bbi = ball_boss[bi]
+        bbj = ball_boss[bj]
+        bbi_R = ball_R[bbi]
+        bbj_R = ball_R[bbj]
+        dist_bbi_bi = np.sqrt(np.sum((ball_findices[bbi] - ball_findices[bi]) ** 2))
+        dist_bbj_bj = np.sqrt(np.sum((ball_findices[bbj] - ball_findices[bj]) ** 2))
+        dist_bibj = dSqrt
+
+        if level_diff < -1 and ratio_boss(bbj_R, rj, dist_bbj_bj, noise) < ratio_peer(
+            ri, rj, dist_bibj, noise
+        ):
+            ball_boss[bj] = bi
+        elif level_diff > 1 and ratio_boss(bbi_R, ri, dist_bbi_bi, noise) < ratio_peer(
+            rj, ri, dist_bibj, noise
+        ):
+            ball_boss[bi] = bj
+        elif (
+            level_diff > 0
+            and ratio_near(bbi_R, ri, dist_bbi_bi, noise, 1.2)
+            < ratio_near(rj, ri, dist_bibj, noise, 1.3)
+            and not inParents(ball_boss, bj, bi)
+        ):
+            ball_boss[bi] = bj
+        elif (
+            level_diff < 0
+            and ratio_near(bbj_R, rj, dist_bbj_bj, noise, 1.2)
+            < ratio_near(ri, rj, dist_bibj, noise, 1.3)
+            and not inParents(ball_boss, bi, bj)
+        ):
+            ball_boss[bj] = bi
+    else:  # mvi != mvj:
+        mbi_R = ball_R[mbi]
+        mbj_R = ball_R[mbj]
+        avg_R = 0.5 * (mbi_R + mbj_R)
+        if (
+            np.sum((ball_findices[mbi] - ball_findices[mbj]) ** 2)
+            < _lenNf * (avg_R + 2.0 * noise) ** 2
+        ):
+            if mbi_R < mbj_R:
+                bi, bj, mbi, mbj = bj, bi, mbj, mbi
+
+            mbj_R = ball_R[mbj]
+            if (
+                mbj_R < _vmvRadRelNf * ball_R[bj] + noise
+                and mbj_R < _vmvRadRelNf * ball_R[bi] + noise
+                and mbj_R < _vmvRadRelNf * ball_R[ball_boss[bi]] + noise
+            ):
+                while (
+                    ball_boss[bj] != bj
+                    and mbj_R < _vmvRadRelNf * ball_R[ball_boss[bj]] + noise
                 ):
-                    ball_boss[vi] = vj
-                elif (
-                    leveli < levelj
-                    and (bvj_R - rj + 2.0 * noise) / (dist_bvj_vj + 1.2)
-                    < (ri - rj + 2.0 * noise) / (dist_vivj + 1.3)
-                    and not inParents(ball_boss, vi, vj)
-                ):
-                    ball_boss[vj] = vi
-                    # elif (
-                    #     dt[middlevxlz, middlevxly, middlevxlx]
-                    #     >= 0.45 * (ri + rj) - 1.0
-                    #     and np.sqrt(dSqr) < (ri + rj) * 0.5 + 2
-                    # ):
-                    #     # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi,vj)
-                    #     vi, vj = vj, vi
-                    """
-                    def makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj):
-                        if ball_R[vj] > ball_R[vi]:
-                        ball_R[vi], ball_R[vj] = ball_R[vj], ball_R[vi]
-                        ball_boss[vi], ball_boss[vj] = ball_boss[vj], ball_boss[vi]
-                        ball_indices[vi], ball_indices[vj] = ball_indices[vj], ball_indices[vi]
-                        ball_findices[vi], ball_findices[vj] = ball_findices[vj], ball_findices[vi]
-                    """
-                # elif ... make friends
-                # if get_masterball(ball_boss, vi) != get_masterball(
-                #     ball_boss, vj
-                # ):
-                #     print("Warning: paradox")
-            else:  # mvi != mvj:
-                mvi_R = ball_R[mvi]
-                mvj_R = ball_R[mvj]
-                if np.sum((ball_findices[mvi] - ball_findices[mvj]) ** 2) <= _lenNf * (
-                    0.5 * (mvi_R + mvj_R) + 2.0 * noise
-                ) * (0.5 * (mvi_R + mvj_R) + 2.0 * noise):
-                    if mvi_R < mvj_R:
-                        vi, vj, mvi, mvj = vj, vi, mvj, mvi
+                    temp = ball_boss[bj]
+                    ball_boss[bj] = bi
+                    bi = bj
+                    bj = temp
+                if ball_boss[bj] == bj and get_masterball(ball_boss, bi) != bj:
+                    ball_boss[bj] = bi
+        if bi != ball_boss[bj]:
+            mbi = get_masterball(ball_boss, bi)
+            mbj = get_masterball(ball_boss, bj)
+            leveli = get_ball_level(ball_boss, bi)
+            levelj = get_ball_level(ball_boss, bj)
+            dist_avg = (
+                np.sqrt(np.sum((ball_findices[mbj] - ball_findices[mbi]) ** 2))
+                + 0.5 * noise
+            )
+            babb = np.array([bi, bj], dtype=np.int32)
+            lalb = np.array([leveli, levelj], dtype=np.int32)
 
-                    mvj_R = ball_R[mvj]
-                    if (
-                        mvj_R < _vmvRadRelNf * ball_R[vj] + noise
-                        and mvj_R < _vmvRadRelNf * ball_R[vi] + noise
-                        and mvj_R < _vmvRadRelNf * ball_R[ball_boss[vi]] + noise
-                    ):
-                        while (
-                            vj != ball_boss[vj]
-                            and mvj_R < _vmvRadRelNf * ball_R[ball_boss[vj]] + noise
-                        ):
-                            pvj = ball_boss[vj]
-                            ball_boss[vj] = vi
-                            vi = vj
-                            vj = pvj
-                        if ball_boss[vj] == vj and get_masterball(ball_boss, vi) != vj:
-                            ball_boss[vj] = vi
-                if vi != ball_boss[vj]:
-                    mvi = get_masterball(ball_boss, vi)
-                    mvj = get_masterball(ball_boss, vj)
-                    leveli = get_ball_level(ball_boss, vi)
-                    levelj = get_ball_level(ball_boss, vj)
-                    distAvg = (
-                        np.sqrt(np.sum((ball_findices[mvj] - ball_findices[mvi]) ** 2))
-                        + 0.5 * noise
-                    )
-                    while leveli >= levelj and (
-                        ball_R[ball_boss[vi]] - ball_R[vi] + 0.55 * noise
-                    ) / (
-                        np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vi]) ** 2))
-                        + distAvg
-                    ) < (ball_R[vj] - ball_R[vi] + 0.5 * noise) / (
-                        np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vi]) ** 2))
-                        + distAvg
-                    ):
-                        pvi = ball_boss[vi]
-                        ball_boss[vi] = vj
-                        vj = vi
-                        vi = pvi
-                        levelj += 1
-                        leveli -= 1
-                    while levelj >= leveli and (
-                        ball_R[ball_boss[vj]] - ball_R[vj] + 0.55 * noise
-                    ) / (
-                        np.sqrt(np.sum((ball_findices[mvj] - ball_findices[vj]) ** 2))
-                        + distAvg
-                    ) < (ball_R[vi] - ball_R[vj] + 0.5 * noise) / (
-                        np.sqrt(np.sum((ball_findices[mvi] - ball_findices[vj]) ** 2))
-                        + distAvg
-                    ):
-                        pvj = ball_boss[vj]
-                        ball_boss[vj] = vi
-                        vi = vj
-                        vj = pvj
-                        leveli += 1
-                        levelj -= 1
-                    # vi, vj = vj, vi
-                    # makeFriend(ball_R, ball_boss, ball_indices, ball_findices, vi, vj)
+            def balance_step(babb, ma, mb, lalb):
+                ba, bb = babb
+                levela, levelb = lalb
+                if levela < levelb:
+                    return False
+                dist_maba = np.sqrt(
+                    np.sum((ball_findices[ma] - ball_findices[ba]) ** 2)
+                )
+                dist_mbba = np.sqrt(
+                    np.sum((ball_findices[mb] - ball_findices[ba]) ** 2)
+                )
+                if (ball_R[ball_boss[ba]] - ball_R[ba] + 0.55 * noise) / (
+                    dist_maba + dist_avg
+                ) >= (ball_R[bb] - ball_R[ba] + 0.5 * noise) / (dist_mbba + dist_avg):
+                    return False
+                temp = ball_boss[ba]
+                ball_boss[ba] = bb
+                babb[1] = ba
+                babb[0] = temp
+                levela -= 1
+                levelb += 1
+                return True
 
-                    # make friends
+            while balance_step(
+                babb,
+                mbi,
+                mbj,
+                lalb,
+            ):
+                pass
+
+            babb[0], babb[1] = babb[1], babb[0]
+            lalb[0], lalb[1] = lalb[1], lalb[0]
+
+            while balance_step(babb, mbj, mbi, lalb):
+                pass
 
 
 @nb.njit(
@@ -646,44 +651,39 @@ def findBoss(
         whichball[keys[i]] = np.int64(i)
 
     for i in range(nBalls):
-        zo, yo, xo = (
-            ball_findices[i, 0],
-            ball_findices[i, 1],
-            ball_findices[i, 2],
-        )
+        fzo, fyo, fxo = ball_findices[i]
+        izo, iyo, ixo = ball_indices[i]
 
-        ripp = ball_R[i] * 0.6 + 2.0 * _MSNoise + 2.0
-        ripp2 = ripp**2
-        rz = ripp
-        zis = np.arange(-rz, rz + 1e-6, 1.0, dtype=np.float32)
-        for zi in zis:
-            ry2 = ripp2 - zi**2
-            if ry2 <= 0:
+        r_sphere = ball_R[i] * 0.6 + 2.0 * _MSNoise + 2.0
+        r_sphere_2 = r_sphere**2
+
+        z_start = max(int(np.ceil(fzo - _0p5 - r_sphere)), 0)
+        z_end = min(int(np.floor(fzo - _0p5 + r_sphere)) + 1, nz)
+
+        for z in range(z_start, z_end):
+            dz = z + _0p5 - fzo
+            ry2 = r_sphere_2 - dz * dz
+            if ry2 <= 0.0:
                 continue
             ry = np.sqrt(ry2)
-            yis = np.arange(-ry, ry + 1e-6, 1.0, dtype=np.float32)
-            for yi in yis:
-                rx2 = ry2 - yi**2
-                if rx2 <= 0:
+
+            y_start = max(int(np.ceil(fyo - _0p5 - ry)), 0)
+            y_end = min(int(np.floor(fyo - _0p5 + ry)) + 1, ny)
+
+            for y in range(y_start, y_end):
+                dy = y + _0p5 - fyo
+                rx2 = ry2 - dy * dy
+                if rx2 <= 0.0:
                     continue
                 rx = np.sqrt(rx2)
-                xis = np.arange(-rx, rx + 1e-6, 1.0, dtype=np.float32)
-                for xi in xis:
-                    z = np.int64(zo + zi)
-                    y = np.int64(yo + yi)
-                    x = np.int64(xo + xi)
-                    if (
-                        (zi == 0 and yi == 0 and xi == 0)
-                        or z < 0
-                        or z >= nz
-                        or y < 0
-                        or y >= ny
-                        or x < 0
-                        or x >= nx
-                        or ~isball[z, y, x]
-                    ):
+
+                x_start = max(int(np.ceil(fxo - _0p5 - rx)), 0)
+                x_end = min(int(np.floor(fxo - _0p5 + rx)) + 1, nx)
+
+                for x in range(x_start, x_end):
+                    if ~isball[z, y, x] or (z == izo and y == iyo and x == ixo):
                         continue
-                    vj = whichball[z * ny * nx + y * nx + x]
+                    vj = whichball[np.int64((z * ny + y) * nx + x)]
                     competeForParent(
                         np.int64(i),
                         vj,

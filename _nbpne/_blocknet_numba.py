@@ -1,6 +1,6 @@
 import numba as nb
 import numpy as np
-from ._extraction_functions_numba import get_masterball
+from ._extraction_functions_numba import get_masterball, _0p5
 
 
 @nb.njit(
@@ -13,7 +13,7 @@ from ._extraction_functions_numba import get_masterball
 )
 def get_max_count_nei(neis, n_neIs):
     max_count = 0
-    max_val = -1
+    max_val = -257
 
     for i in range(n_neIs):
         count = 0
@@ -32,7 +32,6 @@ def get_max_count_nei(neis, n_neIs):
 @nb.njit(parallel=False, cache=True, fastmath=True, nogil=True)
 def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_boss):
     raw_value = -1
-    firstPores = 0
     nz, ny, nx = img_bool.shape
     VElems = np.full((nz + 2, ny + 2, nx + 2), raw_value, dtype=np.int32)
     poreIs = np.where(ball_boss == np.arange(ball_boss.shape[0]))[0]
@@ -42,50 +41,40 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
         VElems[zm, ym, xm] = ind
 
     for ball_index in range(ball_findices.shape[0]):
-        # if ball_boss[ball_index] == ball_index:
-        #     continue
         masterball = get_masterball(ball_boss, ball_index)
         zm, ym, xm = ball_indices[masterball] + 1
         Vm = VElems[zm, ym, xm]
-        # assert 0 <= VElemV < len(poreIs), f"Invalid VElemV: {VElemV}"
-        zo, yo, xo = ball_findices[ball_index]
+        fzo, fyo, fxo = ball_findices[ball_index]
         r = ball_R[ball_index]
-        # r2 = r**2
-        rz2 = np.int32((max(r * 0.25 - 1.0, 1.001)) ** 2)
-        rz = np.sqrt(rz2)
 
-        zfs = np.arange(
-            max(zo - rz, 0.5), min(zo + rz, nz - 0.5) + 1e-6, 1.0, dtype=np.float32
-        )
-        for zf in zfs:
-            ry2 = rz2 - (zf - zo) ** 2
-            if ry2 <= 0:
+        r_sphere = max(r * 0.5 - 1.0, 1.001)
+        r_sphere_2 = r_sphere**2
+
+        z_start = max(int(np.ceil(fzo - _0p5 - r_sphere)), 0)
+        z_end = min(int(np.floor(fzo - _0p5 + r_sphere)) + 1, nz)
+
+        for z in range(z_start, z_end):
+            dz = z + _0p5 - fzo
+            ry2 = r_sphere_2 - dz * dz
+            if ry2 <= 0.0:
                 continue
             ry = np.sqrt(ry2)
-            yfs = np.arange(
-                max(yo - ry, 0.5), min(yo + ry, ny - 0.5) + 1e-6, 1.0, dtype=np.float32
-            )
-            for yf in yfs:
-                rx2 = ry2 - (yf - yo) ** 2
-                if rx2 <= 0:
+
+            y_start = max(int(np.ceil(fyo - _0p5 - ry)), 0)
+            y_end = min(int(np.floor(fyo - _0p5 + ry)) + 1, ny)
+
+            for y in range(y_start, y_end):
+                dy = y + _0p5 - fyo
+                rx2 = ry2 - dy * dy
+                if rx2 <= 0.0:
                     continue
                 rx = np.sqrt(rx2)
-                xfs = np.arange(
-                    max(xo - rx, 0.5), min(xo + rx, nx - 0.5) + 1e-6, 1.0, np.float32
-                )
-                for xf in xfs:
-                    z = np.int32(zf)
-                    y = np.int32(yf)
-                    x = np.int32(xf)
-                    if (
-                        z < 0
-                        or z >= nz
-                        or y < 0
-                        or y >= ny
-                        or x < 0
-                        or x >= nx
-                        or ~img_bool[z, y, x]
-                    ):
+
+                x_start = max(int(np.ceil(fxo - _0p5 - rx)), 0)
+                x_end = min(int(np.floor(fxo - _0p5 + rx)) + 1, nx)
+
+                for x in range(x_start, x_end):
+                    if ~img_bool[z, y, x]:
                         continue
                     zVE = z + 1
                     yVE = y + 1
@@ -93,17 +82,25 @@ def CreateVElem(img_bool, dt, isball, ball_indices, ball_findices, ball_R, ball_
                     Vi = VElems[zVE, yVE, xVE]
                     if Vi == raw_value:
                         VElems[zVE, yVE, xVE] = Vm
-                    elif Vi != Vm:
-                        if ~isball[z, y, x] and dt[z, y, x] < r:
-                            zif = zf - ball_findices[Vi, 0]
-                            yif = yf - ball_findices[Vi, 1]
-                            xif = xf - ball_findices[Vi, 2]
-                            zmf = zf - ball_findices[masterball, 0]
-                            ymf = yf - ball_findices[masterball, 1]
-                            xmf = xf - ball_findices[masterball, 2]
+                        continue
+                    if Vi == Vm:
+                        continue
 
-                            if zmf**2 + ymf**2 + xmf**2 < zif**2 + yif**2 + xif**2:
-                                VElems[zVE, yVE, xVE] = Vm
+                    if isball[z, y, x] or ball_R[Vi] >= r:
+                        continue
+                    fz_old = z + _0p5 - ball_findices[Vi, 0]
+                    fy_old = y + _0p5 - ball_findices[Vi, 1]
+                    fx_old = x + _0p5 - ball_findices[Vi, 2]
+                    fz_new = z + _0p5 - ball_findices[masterball, 0]
+                    fy_new = y + _0p5 - ball_findices[masterball, 1]
+                    fx_new = x + _0p5 - ball_findices[masterball, 2]
+                    if (
+                        fz_new**2 + fy_new**2 + fx_new**2
+                        >= fz_old**2 + fy_old**2 + fx_old**2
+                    ):
+                        continue
+                    VElems[zVE, yVE, xVE] = Vm
+
     return VElems, poreIs
 
 
@@ -494,7 +491,7 @@ def median_elem(zsysxs_v, VElems, voxls, bgn):
         n_diff = 0
         neIs = np.empty(6, dtype=np.int32)
         n_neIs = 0
-        V_current = VElems[z, y, x - 1]
+        V_current = voxls[z, y, x - 1]
         if V_current == pID:
             n_same += 1
         elif bgn <= V_current:
